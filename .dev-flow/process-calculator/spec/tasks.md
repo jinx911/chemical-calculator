@@ -9,4 +9,6 @@
 - [x] **T5｜项目备份与恢复**（AC8，`test_strategy: tdd`）。实现版本化 JSON 导出、校验和原子导入副本。验证草稿及历史快照往返、重新映射引用，并确认不支持版本或坏引用不会改变原项目。
 - [x] **T6｜静态发布产物与工作流**（AC9，`test_strategy: smoke`）。在独立仓库配置 GitHub Actions，验证通过后打包允许发布的网页、模块、样式和公开算例。以仓库子路径预览，确认资源与示例能加载，检查产物仅含公开内容。
 - [x] **T7｜发布前验收**（AC1–AC9 本地部分，`test_strategy: smoke`）。在浏览器从冷却水示例走完比选、校核、保存、改工况、版本对比、PDF 及 JSON 交接。核对独立计算结果、刷新恢复、诊断及网络请求，通过后才发布。
-- [ ] **T8｜GitHub Pages 发布与线上验收**（AC9，`test_strategy: smoke`）。推送已验收版本，等待 Pages 发布成功。从实际 HTTPS 地址复查资源加载、计算、保存重开与导出，核对项目数据不上传，记录站点地址和发布提交。
+- [x] **T8｜GitHub Pages 发布与线上验收**（AC9，`test_strategy: smoke`）。推送已验收版本，等待 Pages 发布成功。从实际 HTTPS 地址复查资源加载、计算、保存重开与导出，核对项目数据不上传，记录站点地址和发布提交。
+
+2026-11-11 已验收。[线上工作台](https://jinx911.github.io/chemical-calculator/)由 [GitHub Actions](https://github.com/jinx911/chemical-calculator/actions/runs/42983165844) 发布，应用提交为 `a333fca`。15 项单测通过，Chrome 在本地和公开站点均完成算例计算、版本比对、PDF、JSON 恢复和移动端检查。网络记录仅包含同站点静态资源请求。
