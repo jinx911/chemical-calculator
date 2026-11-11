@@ -47,6 +47,13 @@ async function checkVersions(page) {
   ];
   await page.locator('#open-example').click();
   await expectRows(page, initial);
+  const limit = page.getByLabel('阻力压降上限（kPa）', { exact: true });
+  assert.equal(await limit.inputValue(), '35');
+  await limit.fill('28');
+  assert.match(await page.locator('.summary-card.fail').innerText(), /最大工况 压降超限/);
+  await page.getByRole('button', { name: '恢复项目上限' }).click();
+  assert.equal(await limit.inputValue(), '35');
+  await expectRows(page, initial);
   await page.locator('#results tbody tr').first().getByRole('button', { name: '查看计算依据' }).click();
   assert.match(await page.locator('#formula-detail').innerText(), /摩阻因子.*|沿程损失/);
 
@@ -132,15 +139,70 @@ async function checkBackup(browser, page, url) {
   await other.close();
 }
 
-async function checkStart(page) {
+function worksheetField(page, group, key, index = 0) {
+  return page.locator(`input[data-path^="${group}."][data-path$=".${key}"]:visible`).nth(index);
+}
+
+async function fillWorksheet(page, group, index, values) {
+  for (const [key, value] of Object.entries(values)) {
+    await worksheetField(page, group, key, index).fill(value);
+  }
+}
+
+async function checkStart(page, directory) {
   await page.getByRole('button', { name: '开始管径比选' }).click();
   await page.getByLabel('项目名称').fill('冷却水泵房改造');
+  await page.getByLabel('管线编号或名称（可选）').fill('循环水至冷却器供水支线');
   await page.getByRole('button', { name: '填写计算条件' }).click();
   const flow = page.getByLabel('体积流量', { exact: true });
   await flow.waitFor();
   assert(await flow.evaluate(input => input === document.activeElement));
   assert.match(await page.locator('#results').innerText(), /这里会显示比选结果/);
   assert(await page.locator('#save-version').isDisabled());
+  await fillWorksheet(page, 'scenarios', 0, { name: '正常工况', flow: '30', density: '997', viscosity: '0.89', source: '循环水设计条件表' });
+  await page.getByRole('button', { name: '＋ 添加工况' }).click();
+  for (const [field, value] of Object.entries({ density: '997', viscosity: '0.89', source: '循环水设计条件表', flow: '' })) {
+    assert.equal(await worksheetField(page, 'scenarios', field, 1).inputValue(), value);
+  }
+  await fillWorksheet(page, 'scenarios', 1, { name: '最大工况', flow: '55' });
+  await fillWorksheet(page, 'options', 0, {
+    diameter: '102.3', length: '120', roughness: '0.045', elevation: '4', k: '4.8', kSource: '冷却器供水支线管件表',
+  });
+  await page.getByRole('button', { name: '＋ 添加候选管径' }).click();
+  for (const [field, value] of Object.entries({ length: '120', roughness: '0.045', elevation: '4', diameter: '', k: '' })) {
+    assert.equal(await worksheetField(page, 'options', field, 1).inputValue(), value);
+  }
+  await fillWorksheet(page, 'options', 1, { diameter: '128.2', k: '5.4', kSource: '扩径方案管件表' });
+  await page.getByLabel('流速上限（m/s）', { exact: true }).fill('2');
+  await page.getByLabel('阻力压降上限（kPa）', { exact: true }).fill('35');
+  await expectRows(page, [
+    ['正常工况', '102.3 mm', 14.34, /满足/], ['正常工况', '128.2 mm', 5, /满足/],
+    ['最大工况', '102.3 mm', 45.64, /压降超限/], ['最大工况', '128.2 mm', 15.82, /满足/],
+  ]);
+  await page.getByLabel('液体介质').fill('循环冷却水');
+  await page.getByLabel('入口位置').fill('循环水泵房供水总管');
+  await page.getByLabel('出口位置').fill('冷却器入口');
+  await page.getByRole('button', { name: '选用 内径 128.2 mm', exact: true }).click();
+  const reason = page.getByLabel('选型理由');
+  assert(await reason.evaluate(input => input === document.activeElement));
+  await reason.fill('最大工况下流速和阻力压降均满足项目限值');
+  const print = page.getByRole('button', { name: '保存并打印计算书' });
+  await print.click();
+  await page.waitForFunction(() => window.printRequested === true);
+  const report = await page.locator('#report').textContent();
+  assert.match(report, /循环水至冷却器供水支线/);
+  assert.match(report, /循环水泵房供水总管 → 冷却器入口/);
+  assert.match(report, /扩径方案管件表/);
+  assert.match(report, /选定方案：内径 128\.2 mm/);
+  assert.match(report, /最大工况下流速和阻力压降均满足项目限值/);
+  await page.emulateMedia({ media: 'print' });
+  const pdf = await page.pdf({ preferCSSPageSize: true, path: directory ? resolve(directory, 'engineer-handoff.pdf') : undefined });
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+  await page.emulateMedia({ media: 'screen' });
+  await page.evaluate(() => { window.printRequested = false; });
+  await print.click();
+  await page.waitForFunction(() => window.printRequested === true);
+  assert.equal(await page.locator('#version-to option').count(), 1);
   await page.getByRole('button', { name: '化工工艺工作台首页' }).click();
 }
 
@@ -159,7 +221,7 @@ try {
   page.on('request', request => requests.push([request.method(), request.url()]));
   await page.addInitScript(() => { window.print = () => { window.printRequested = true; }; });
   await page.goto(url);
-  await checkStart(page);
+  await checkStart(page, directory);
   await checkVersions(page);
   await checkReport(page, directory, 1);
   await checkReport(page, directory, 2);

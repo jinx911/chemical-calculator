@@ -35,35 +35,47 @@ export function createWorksheet(projectId) {
 }
 
 /** Creates a scenario with independent flow and fluid property inputs. */
-export function createScenario() {
+export function createScenario(previous) {
   return {
     id: crypto.randomUUID(),
     name: '',
     flow: '',
-    flowUnit: 'm³/h',
-    density: '',
-    viscosity: '',
-    viscosityUnit: 'mPa·s',
-    source: '',
+    flowUnit: previous?.flowUnit ?? 'm³/h',
+    density: previous?.density ?? '',
+    viscosity: previous?.viscosity ?? '',
+    viscosityUnit: previous?.viscosityUnit ?? 'mPa·s',
+    source: previous?.source ?? '',
   };
 }
 
 /** Creates a candidate pipe with optional default and per-scenario K values. */
-export function createOption() {
+export function createOption(previous) {
   return {
     id: crypto.randomUUID(),
     name: '',
     diameter: '',
-    diameterUnit: 'mm',
-    length: '',
-    roughness: '',
-    roughnessUnit: 'mm',
-    elevation: '',
+    diameterUnit: previous?.diameterUnit ?? 'mm',
+    length: previous?.length ?? '',
+    roughness: previous?.roughness ?? '',
+    roughnessUnit: previous?.roughnessUnit ?? 'mm',
+    elevation: previous?.elevation ?? '',
     k: '',
     kSource: '',
     kRegime: 'any',
     kOverrides: {},
   };
+}
+
+export function scenarioLabel(scenario, index) {
+  return scenario.name.trim() || '工况 ' + (index + 1);
+}
+
+export function optionLabel(option, index) {
+  if (option.name.trim()) return option.name.trim();
+  const diameter = String(option.diameter ?? '').trim();
+  return diameter && Number.isFinite(Number(diameter)) && Number(diameter) > 0
+    ? '内径 ' + diameter + ' ' + option.diameterUnit
+    : '方案 ' + (index + 1);
 }
 
 function coolingWaterScenario(name, flow) {

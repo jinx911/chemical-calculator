@@ -1,5 +1,5 @@
 import { calculate, convertUnit, UNITS } from './hydraulics.mjs';
-import { createExample, createOption, createProject, createScenario, createWorksheet } from './model.mjs';
+import { createExample, createOption, createProject, createScenario, createWorksheet, scenarioLabel, optionLabel } from './model.mjs';
 import { openStorage } from './storage.mjs';
 import { serializeBackup } from './project-file.mjs';
 import { compareRevisions, printReport } from './report.mjs';
@@ -19,7 +19,6 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 })[char]);
 const regimeChoices = [['any', '所有适用流态'], ['laminar', '仅层流'], ['turbulent', '仅湍流']];
-const limitModes = [['inherit', '继承项目限值'], ['custom', '单独设置'], ['none', '未设置']];
 const pressure = (value, digits = 2) => formatNumber(value == null ? null : value / 1000, digits);
 const safeName = (value, fallback) => value?.trim() || fallback;
 const option = ([value, label], selected) =>
@@ -200,11 +199,11 @@ function scenarioCard(row, index, count) {
   return `<article class="card"><header><h3>工况 ${index + 1}</h3>
     ${action('移除', 'remove-scenario', 'small remove', `data-id="${esc(row.id)}" aria-label="移除工况 ${index + 1}" ${count <= 1 ? 'disabled' : ''}`)}
     </header><div class="grid">
-      ${field('工况名称', `${path}.name`, row.name, { wide: true })}
+      ${field('工况名称（可选）', `${path}.name`, row.name, { wide: true })}
       ${field('体积流量', `${path}.flow`, row.flow, { numeric: true, unit: inputUnit(path, 'flow', row) })}
       ${field('密度（kg/m³）', `${path}.density`, row.density, { numeric: true })}
       ${field('动力黏度', `${path}.viscosity`, row.viscosity, { numeric: true, unit: inputUnit(path, 'viscosity', row) })}
-      ${field('物性及流量依据', `${path}.source`, row.source, { wide: true })}
+      ${field('物性来源（可选）', `${path}.source`, row.source, { wide: true })}
     </div></article>`;
 }
 
@@ -213,7 +212,7 @@ function overrides(row, scenarios, path) {
     ${scenarios.map((scenario, index) => {
       const item = row.kOverrides[scenario.id] ?? {};
       const base = `${path}.kOverrides.${scenario.id}`;
-      return `<div class="grid"><h3 class="wide" data-override-scenario="${esc(scenario.id)}">${esc(safeName(scenario.name, `工况 ${index + 1}`))}</h3>
+      return `<div class="grid"><h3 class="wide" data-override-scenario="${esc(scenario.id)}">${esc(scenarioLabel(scenario, index))}</h3>
         ${field('该工况的 K 值', `${base}.k`, item.k ?? '', { numeric: true })}
         ${field('适用流态', `${base}.regime`, item.regime ?? 'any', { select: regimeChoices })}
         ${field('K 值依据', `${base}.source`, item.source ?? '', { wide: true })}</div>`;
@@ -225,7 +224,7 @@ function optionCard(row, index, count, scenarios) {
   return `<article class="card"><header><h3>方案 ${index + 1}</h3>
     ${action('移除', 'remove-option', 'small remove', `data-id="${esc(row.id)}" aria-label="移除方案 ${index + 1}" ${count <= 1 ? 'disabled' : ''}`)}
     </header><div class="grid">
-      ${field('方案名称', `${path}.name`, row.name, { wide: true })}
+      ${field('方案名称（可选）', `${path}.name`, row.name, { wide: true })}
       ${field('实际内径', `${path}.diameter`, row.diameter, { numeric: true, unit: inputUnit(path, 'diameter', row) })}
       ${field('管长（m）', `${path}.length`, row.length, { numeric: true })}
       ${field('绝对粗糙度', `${path}.roughness`, row.roughness, { numeric: true, unit: inputUnit(path, 'roughness', row) })}
@@ -236,15 +235,33 @@ function optionCard(row, index, count, scenarios) {
     </div>${overrides(row, scenarios, path)}</article>`;
 }
 
+const limitFields = [['velocity', '流速', 'm/s'], ['pressure', '阻力压降', 'kPa']];
+
 function worksheetLimits(draft) {
   return `<div class="grid">
-    ${[['velocity', '流速', 'm/s'], ['pressure', '阻力压降', 'kPa']].map(([key, label, unit]) => {
+    ${limitFields.map(([key, label, unit]) => {
       const setting = draft.limits[key];
-      return field(`${label}判据`, `limits.${key}.mode`, setting.mode, { select: limitModes })
-        + field(`${label}上限（${unit}）`, `limits.${key}.value`, setting.mode === 'inherit' ? state.project.limits[key] : setting.mode === 'custom' ? setting.value : '',
-          { numeric: true, disabled: setting.mode !== 'custom' });
+      const value = setting.mode === 'inherit' ? state.project.limits[key]
+        : setting.mode === 'custom' ? setting.value : '';
+      return `<div>${field(`${label}上限（${unit}）`, `limits.${key}.value`, value,
+        { numeric: true })}<div class="limit-source">
+          <span class="hint" data-limit-source="${key}"></span>
+          ${action('恢复项目上限', 'inherit-limit', 'small', `data-id="${key}" hidden`)}
+        </div></div>`;
     }).join('')}
-  </div><p class="hint">两项都可判定且满足时，才显示「满足」。高差压力项不计入阻力压降上限。</p>`;
+  </div><p class="hint">按项目规定填写。留空的项目只计算数值；高差压力项不计入阻力压降上限。</p>`;
+}
+
+function updateLimitHints() {
+  for (const [key] of limitFields) {
+    const setting = state.worksheet.draft.limits[key];
+    const inherited = setting.mode === 'inherit';
+    const input = document.querySelector(`[data-path="limits.${key}.value"]`);
+    document.querySelector(`[data-limit-source="${key}"]`).textContent = input.value.trim() === ''
+      ? '未设置上限' : inherited ? '沿用项目上限' : '仅用于这条管线';
+    document.querySelector(`[data-action="inherit-limit"][data-id="${key}"]`).hidden =
+      inherited || !state.project.limits[key];
+  }
 }
 
 function formatDate(date) {
@@ -254,7 +271,7 @@ function formatDate(date) {
 
 function renderWorksheet() {
   const { draft } = state.worksheet;
-  const selection = [['', '暂未选定'], ...draft.options.map((item, index) => [item.id, safeName(item.name, `方案 ${index + 1}`)])];
+  const selection = [['', '暂未选定'], ...draft.options.map((item, index) => [item.id, optionLabel(item, index)])];
   return `
     <div class="page-title">
       <p class="crumb">${esc(state.project.name)} / 管径与压降</p>
@@ -267,26 +284,29 @@ function renderWorksheet() {
     </div>
     <section class="section results-panel" id="results-panel" aria-labelledby="results-title">
       <header class="section-head result-head"><div><h2 id="results-title">管径比选结果</h2><p class="muted">更改流量、管径或限值后，结果会自动更新。</p></div>
-        ${action('保存本次结果', 'save-version', 'primary', 'id="save-version"')}
+        <a class="button" id="handoff-link" href="#handoff-panel" hidden>记录选型并出计算书</a>
       </header>
       <div id="results"></div>
     </section>
     <div class="conditions-head" id="conditions-panel">
       <h2>计算条件</h2><a href="#results-panel">返回比选结果</a>
     </div>
-    ${section('工况', `<div class="cards">${draft.scenarios.map((row, index) => scenarioCard(row, index, draft.scenarios.length)).join('')}</div>`, action('＋ 添加工况', 'add-scenario', 'small'))}
-    ${section('候选管径', `<div class="cards">${draft.options.map((row, index) => optionCard(row, index, draft.options.length, draft.scenarios)).join('')}</div>`, action('＋ 添加候选管径', 'add-option', 'small'))}
-    ${section('校核限值', worksheetLimits(draft))}
-    <details class="section pipe-details" data-key="pipe-details"><summary>管线名称、介质和起终点</summary>
-      <div class="grid">
+    ${section('工况', `<p class="hint reuse-hint">新增工况沿用上一工况的物性，可修改。每个工况单独填写流量。</p><div class="cards">${draft.scenarios.map((row, index) => scenarioCard(row, index, draft.scenarios.length)).join('')}</div>`, action('＋ 添加工况', 'add-scenario', 'small'))}
+    ${section('候选管径', `<p class="hint reuse-hint">新增方案沿用上一方案的管长、粗糙度和高差，可修改。实际内径和 K 值单独填写。确认无局部损失时，K 填 0。</p><div class="cards">${draft.options.map((row, index) => optionCard(row, index, draft.options.length, draft.scenarios)).join('')}</div>`, action('＋ 添加候选管径', 'add-option', 'small'))}
+    ${section('校核限值', worksheetLimits(draft), '', 'id="limits-panel"')}
+    ${section('计算书上的管线资料', `<div class="grid">
       ${field('管线编号或名称', 'line', draft.line)}${field('液体介质', 'medium', draft.medium)}
       ${field('入口位置', 'from', draft.from)}${field('出口位置', 'to', draft.to)}
-      </div>
-    </details>
-    ${section('选型记录', `<div class="grid">
+    </div>`)}
+    ${section('选型与计算书', `<div class="grid">
       ${field('选定方案', 'selection.optionId', draft.selection.optionId || '', { select: selection })}
       ${field('选型理由', 'selection.reason', draft.selection.reason, { textarea: true })}
-    </div>`)}
+    </div>
+    <p class="hint" id="handoff-hint"></p>
+    <div class="toolbar handoff-actions">
+      ${action('保存并打印计算书', 'save-and-print', 'primary', 'id="save-print"')}
+      ${action('仅保存本次结果', 'save-version', '', 'id="save-version"')}
+    </div>`, '', 'id="handoff-panel"')}
     ${section('历史版本与计算书', '<div id="versions"></div>', '', 'id="versions-panel"')}
     ${renderProjectFile()}
   `;
@@ -302,7 +322,9 @@ function rowConclusion(row) {
   if (row.velocityStatus === 'fail' && row.pressureStatus === 'fail') return '流速和压降均超限';
   if (row.velocityStatus === 'fail') return '流速超限';
   if (row.pressureStatus === 'fail') return '压降超限';
-  return row.status === 'pass' ? '满足限值' : '待核对';
+  if (row.status === 'pass') return '满足限值';
+  if (row.loss == null) return '待确认压降';
+  return '待填写校核上限';
 }
 
 function renderRow(row, limits) {
@@ -359,21 +381,33 @@ function renderResults() {
   const valid = result.rows.some(row => Number.isFinite(row.velocity));
   const complete = result.issues.length === 0 && valid;
   document.querySelector('#save-version').disabled = !complete;
+  document.querySelector('#save-print').disabled = !complete;
+  document.querySelector('#handoff-link').hidden = !valid;
+  document.querySelector('#handoff-hint').textContent = complete
+    ? '发给同事复核时，可在打印窗口选择「另存为 PDF」。'
+    : '填完计算条件后，可在这里保存结果或打印计算书。';
+  updateLimitHints();
   const summary = result.summaries.map(({ optionId, status }) => {
-    const candidate = draft.options.find(option => option.id === optionId);
+    const index = draft.options.findIndex(option => option.id === optionId);
     const rows = result.rows.filter(row => row.optionId === optionId);
     const failed = rows.filter(row => row.status === 'fail');
     const note = status === 'pass' ? '所有工况均满足限值'
       : failed.length ? failed.map(row => row.scenarioName + ' ' + rowConclusion(row)).join('；')
       : '部分工况缺少条件或限值';
+    const selected = draft.selection.optionId === optionId;
+    const select = rows.some(row => row.loss != null)
+      ? action(selected ? '已选定' : '选用此管径', 'choose-option', 'small',
+        `data-id="${esc(optionId)}" aria-label="${esc((selected ? '已选定 ' : '选用 ') + optionLabel(draft.options[index], index))}"`)
+      : '';
     return `<div class="summary-card ${esc(status)}">
-      <strong>${esc(safeName(candidate?.name, '候选管径'))}</strong><span>${esc(note)}</span>
+      <div class="summary-text"><strong>${esc(optionLabel(draft.options[index], index))}</strong><span>${esc(note)}</span></div>${select}
     </div>`;
   }).join('');
   target.innerHTML = `
     ${unplaced}
     ${!valid ? '<div class="empty-result"><p>填好流量、物性和候选管径后，这里会显示比选结果。</p><a href="#conditions-panel">填写流量和管径</a></div>' : ''}
     ${valid && !complete ? '<p class="hint">部分条件还没填完。检查并补齐后，即可保存本次结果。</p>' : ''}
+    ${valid ? `<p class="hint result-limits">流速上限 ${result.limits.velocity == null ? '未设置' : esc(formatNumber(result.limits.velocity, 8)) + ' m/s'} · 阻力压降上限 ${result.limits.pressure == null ? '未设置' : esc(pressure(result.limits.pressure, 8)) + ' kPa'} <a href="#limits-panel">修改限值</a></p>` : ''}
     ${valid && summary ? `<div class="report-summary">${summary}</div>` : ''}
     ${valid ? `<div class="table-wrap" tabindex="0" aria-label="工况比选表">
       <table><thead><tr><th scope="col">工况</th><th scope="col">候选管径</th><th scope="col">流速（m/s）</th>
@@ -405,7 +439,7 @@ function renderVersions() {
   const panel = document.querySelector('#versions');
   if (!panel) return;
   if (!state.revisions.length) {
-    panel.innerHTML = '<p class="muted">在比选结果中点击「保存本次结果」，这里就能生成该版的计算书。条件变更后再保存一版，就能查看前后差异。</p>';
+    panel.innerHTML = '<p class="muted">在「选型与计算书」保存结果后，可以在这里找回计算书。条件变更后再保存一版，就能对比差异。</p>';
     return;
   }
   const [latest, previous] = state.revisions;
@@ -461,7 +495,7 @@ function updateValue(path, value) {
     } else {
       row[key] = value;
     }
-  } else if (group === 'limits') draft.limits[id][key] = value;
+  } else if (group === 'limits') draft.limits[id] = { mode: 'custom', value };
   else if (group === 'selection') draft.selection[id] = value;
   else draft[group] = value;
   markDraftEdited();
@@ -498,13 +532,15 @@ function handleInput(event) {
       if (title.dataset.overrideScenario === id) title.textContent = safeName(control.value, `工况 ${index + 1}`);
     }
   }
-  if (key === 'name' && group === 'options') {
-    const select = document.getElementById('field-selection.optionId');
-    const index = state.worksheet.draft.options.findIndex(item => item.id === id);
-    const item = [...select.options].find(choice => choice.value === id);
-    if (item) item.textContent = safeName(control.value, `方案 ${index + 1}`);
-  }
+  if ((key === 'name' || key === 'diameter') && group === 'options') updateSelectionLabel(id);
   renderResults();
+}
+
+function updateSelectionLabel(id) {
+  const select = document.getElementById('field-selection.optionId');
+  const index = state.worksheet.draft.options.findIndex(item => item.id === id);
+  const item = [...select.options].find(choice => choice.value === id);
+  if (item && index >= 0) item.textContent = optionLabel(state.worksheet.draft.options[index], index);
 }
 
 function handleChange(event) {
@@ -517,11 +553,10 @@ function handleChange(event) {
   if (!control.dataset.path || control.tagName !== 'SELECT') return;
   if (control.dataset.unit) updateUnit(control);
   else updateValue(control.dataset.path, control.value);
-  if (control.dataset.path.endsWith('.mode')) {
-    render({ preserve: true });
-  } else {
-    renderResults();
+  if (control.dataset.path.startsWith('options.') && control.dataset.path.endsWith('.diameterUnit')) {
+    updateSelectionLabel(control.dataset.path.split('.')[1]);
   }
+  renderResults();
 }
 
 function resetViews() {
@@ -565,12 +600,16 @@ function requestProjectName(forCalculation = false) {
     dialog.className = 'form-dialog';
     dialog.innerHTML = `<form method="dialog">
       <h2>${forCalculation ? '开始管径比选' : '新建项目'}</h2><div class="field"><label for="new-name">项目名称</label><input id="new-name" required maxlength="160" autofocus></div>
+      ${forCalculation ? '<div class="field dialog-pipe"><label for="new-line">管线编号或名称（可选）</label><input id="new-line" maxlength="160"></div>' : ''}
       <div class="toolbar"><button class="button" type="button" data-cancel>取消</button><button class="button primary" type="submit">${forCalculation ? '填写计算条件' : '创建项目'}</button></div>
     </form>`;
     document.body.append(dialog);
     dialog.querySelector('[data-cancel]').addEventListener('click', () => dialog.close());
     dialog.addEventListener('close', () => {
-      const value = dialog.returnValue === 'create' ? dialog.querySelector('input').value.trim() : '';
+      const value = dialog.returnValue === 'create' ? {
+        name: dialog.querySelector('#new-name').value.trim(),
+        line: dialog.querySelector('#new-line')?.value.trim() ?? '',
+      } : null;
       dialog.remove();
       resolve(value);
     }, { once: true });
@@ -582,12 +621,18 @@ function requestProjectName(forCalculation = false) {
   });
 }
 
-async function saveVersion() {
+async function saveVersion(reuseLatest = false) {
   const sheet = structuredClone(state.worksheet);
   const result = calculate(sheet.draft, state.project.limits);
   if (result.issues.length || !result.rows.some(row => Number.isFinite(row.velocity))) {
     announce('请先补齐计算参数。', true);
     return;
+  }
+  const latest = state.revisions[0];
+  if (reuseLatest && latest && latest.algorithm === result.algorithm &&
+      JSON.stringify(latest.draft) === JSON.stringify(sheet.draft) &&
+      JSON.stringify(latest.calculation.limits) === JSON.stringify(result.limits)) {
+    return latest;
   }
   const edit = state.draftEdit;
   const { worksheet, snapshot } = await state.storage.saveRevision(sheet, result);
@@ -603,6 +648,7 @@ async function saveVersion() {
   renderVersions();
   if (!state.draftDirty) setSaveStatus('草稿已保存到此浏览器');
   announce(`已保存第 ${snapshot.sequence} 版，可查看历史或生成计算书。`);
+  return snapshot;
 }
 
 function downloadProject(contents, name) {
@@ -631,8 +677,10 @@ async function exportProject() {
 
 function updateRows(key, id) {
   const draft = state.worksheet.draft;
-  if (key === 'add-scenario') draft.scenarios.push(createScenario());
-  if (key === 'add-option') draft.options.push(createOption());
+  const addedScenario = key === 'add-scenario' ? createScenario(draft.scenarios.at(-1)) : null;
+  const addedOption = key === 'add-option' ? createOption(draft.options.at(-1)) : null;
+  if (addedScenario) draft.scenarios.push(addedScenario);
+  if (addedOption) draft.options.push(addedOption);
   if (key === 'remove-scenario' && draft.scenarios.length > 1) {
     draft.scenarios = draft.scenarios.filter(item => item.id !== id);
     for (const item of draft.options) delete item.kOverrides[id];
@@ -643,6 +691,24 @@ function updateRows(key, id) {
   }
   markDraftEdited();
   render({ preserve: true });
+  if (addedScenario) document.getElementById(`field-scenarios.${addedScenario.id}.flow`).focus();
+  if (addedOption) document.getElementById(`field-options.${addedOption.id}.diameter`).focus();
+}
+
+function restoreProjectLimit(key) {
+  state.worksheet.draft.limits[key] = { mode: 'inherit', value: '' };
+  document.getElementById(`field-limits.${key}.value`).value = state.project.limits[key];
+  markDraftEdited();
+  renderResults();
+  document.getElementById(`field-limits.${key}.value`).focus();
+}
+
+function chooseOption(id) {
+  document.getElementById('field-selection.optionId').value = id;
+  updateValue('selection.optionId', id);
+  renderResults();
+  document.getElementById('handoff-panel').scrollIntoView({ block: 'start' });
+  document.getElementById('field-selection.reason').focus({ preventScroll: true });
 }
 
 function showFormula(button) {
@@ -668,10 +734,11 @@ const operations = {
     await openProject(saved.project, saved.worksheet.id);
   }),
   'start-calculation': run(async () => {
-    const name = await requestProjectName(true);
-    if (!name) return;
-    const project = createProject(name);
+    const details = await requestProjectName(true);
+    if (!details) return;
+    const project = createProject(details.name);
     const worksheet = createWorksheet(project.id);
+    worksheet.draft.line = details.line;
     const saved = await state.storage.createProjectWithWorksheet(project, worksheet);
     state.projects = await state.storage.listProjects();
     await openProject(saved.project, saved.worksheet.id);
@@ -679,9 +746,9 @@ const operations = {
     flow?.focus();
   }),
   'new-project': run(async () => {
-    const name = await requestProjectName();
-    if (!name) return;
-    const project = await state.storage.putProject(createProject(name));
+    const details = await requestProjectName();
+    if (!details) return;
+    const project = await state.storage.putProject(createProject(details.name));
     state.projects = await state.storage.listProjects();
     await openProject(project);
   }),
@@ -694,7 +761,11 @@ const operations = {
     const worksheet = await state.storage.createWorksheet(createWorksheet(state.project.id));
     await openProject(state.project, worksheet.id);
   }),
-  'save-version': run(saveVersion),
+  'save-version': run(() => saveVersion()),
+  'save-and-print': run(async () => {
+    const snapshot = await saveVersion(true);
+    if (snapshot) printReport(state.project, snapshot);
+  }),
   export: run(exportProject, { flush: false }),
   'print-version': run(async () => {
     const snapshot = state.revisions.find(item => item.sequence === state.to);
@@ -708,6 +779,8 @@ document.addEventListener('click', event => {
   const { action: key, id } = button.dataset;
   if (key === 'select-import') importInput.click();
   else if (key === 'row-details') showFormula(button);
+  else if (key === 'inherit-limit') restoreProjectLimit(id);
+  else if (key === 'choose-option') chooseOption(id);
   else if (['add-scenario', 'add-option', 'remove-scenario', 'remove-option'].includes(key)) updateRows(key, id);
   else operations[key]?.(id);
 });

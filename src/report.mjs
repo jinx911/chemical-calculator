@@ -1,4 +1,5 @@
 import { formatNumber, formulaDetails, statusLabel } from './presentation.mjs';
+import { scenarioLabel, optionLabel } from './model.mjs';
 
 const scenarioFields = {
   name: '名称', flow: '流量数值', flowUnit: '流量单位', density: '密度', viscosity: '动力黏度数值',
@@ -98,7 +99,10 @@ export function compareRevisions(before, after) {
   compareItems(changes, '工况', oldDraft.scenarios, newDraft.scenarios, scenarioFields);
   compareItems(changes, '方案', oldDraft.options, newDraft.options, optionFields,
     (...args) => compareOverrides(...args, scenarioNames));
-  const selected = draft => draft.options.find(item => item.id === draft.selection.optionId)?.name;
+  const selected = draft => {
+    const index = draft.options.findIndex(item => item.id === draft.selection.optionId);
+    return index < 0 ? null : optionLabel(draft.options[index], index);
+  };
   addChange(changes, '选定方案', selected(oldDraft), selected(newDraft));
   addChange(changes, '选型理由', oldDraft.selection.reason, newDraft.selection.reason);
   compareResults(changes, before.calculation, after.calculation);
@@ -134,10 +138,10 @@ function measurement(value, unit) {
 function addInputs(report, draft, calculation) {
   report.append(element('h2', '输入条件与取值依据'), table(
     ['工况', '体积流量', '密度（kg/m³）', '动力黏度', '物性依据'],
-    draft.scenarios.map(item => [item.name, measurement(item.flow, item.flowUnit), readable(item.density),
+    draft.scenarios.map((item, index) => [scenarioLabel(item, index), measurement(item.flow, item.flowUnit), readable(item.density),
       measurement(item.viscosity, item.viscosityUnit), readable(item.source)]),
   ), table(['候选方案', '实际内径', '管长（m）', '粗糙度', '高差（m）', 'K 与取值依据'],
-    draft.options.map(item => [item.name, measurement(item.diameter, item.diameterUnit), readable(item.length),
+    draft.options.map((item, index) => [optionLabel(item, index), measurement(item.diameter, item.diameterUnit), readable(item.length),
       measurement(item.roughness, item.roughnessUnit), readable(item.elevation),
       readable(item.k) + ' / ' + readable(item.kSource)]),
   ));
@@ -184,7 +188,8 @@ export function printReport(project, snapshot) {
   const report = document.getElementById('report');
   if (!report) throw new Error('找不到计算书区域。');
   const { draft, calculation } = snapshot;
-  const selection = draft.options.find(option => option.id === draft.selection.optionId);
+  const selectedIndex = draft.options.findIndex(option => option.id === draft.selection.optionId);
+  const selected = selectedIndex < 0 ? '未选定' : optionLabel(draft.options[selectedIndex], selectedIndex);
   const version = snapshot.sequence ? '版本 ' + snapshot.sequence : '草稿预览';
   report.replaceChildren(
     element('h1', '管径比选与压降计算书'),
@@ -196,7 +201,7 @@ export function printReport(project, snapshot) {
   );
   addInputs(report, draft, calculation);
   addResults(report, calculation);
-  report.append(element('h2', '选型记录'), element('p', '选定方案：' + (selection?.name ?? '未选定')),
+  report.append(element('h2', '选型记录'), element('p', '选定方案：' + selected),
     element('p', '选型理由：' + readable(draft.selection.reason)),
     element('p', '方法来源：美国 EPA EPANET 2.2 · Analysis Algorithms'));
   addFormulae(report, calculation);

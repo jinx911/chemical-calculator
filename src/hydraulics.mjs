@@ -1,3 +1,5 @@
+import { scenarioLabel, optionLabel } from './model.mjs';
+
 const ALGORITHM = 'darcy-weisbach-v1';
 const GRAVITY = 9.80665;
 const LAMINAR_LIMIT = 2000;
@@ -239,8 +241,10 @@ function resultRow(scenario, option, limits) {
 /** Computes the scenario × candidate matrix without changing the draft or limits. */
 export function calculate(draft, projectLimits) {
   const issues = [];
-  const scenarios = draft.scenarios.map(scenario => normalizeScenario(scenario, issues));
-  const options = draft.options.map(option => normalizeOption(option, issues));
+  const scenarios = draft.scenarios.map((scenario, index) =>
+    normalizeScenario({ ...scenario, name: scenarioLabel(scenario, index) }, issues));
+  const options = draft.options.map((option, index) =>
+    normalizeOption({ ...option, name: optionLabel(option, index) }, issues));
   const limits = effectiveLimits(draft.limits, projectLimits, issues);
   const rows = scenarios.flatMap(scenario => options.map(option => resultRow(scenario, option, limits)));
   const summaries = options.map(({ id }) => ({

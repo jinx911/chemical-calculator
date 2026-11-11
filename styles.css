@@ -138,12 +138,18 @@ tbody td { overflow-wrap: anywhere; }
 .conditions-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 26px 0 10px; }
 .conditions-head h2 { font-size: 21px; }
 .conditions-head a { font-size: 13px; font-weight: 650; }
-.pipe-details > summary { font-size: 15px; }
 .report-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 9px; margin: 8px 0 13px; }
-.summary-card { display: grid; gap: 4px; padding: 10px 12px; background: #f3f7f3; border: 1px solid var(--line); border-radius: 8px; min-width: 0; overflow-wrap: anywhere; }
+.summary-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; background: #f3f7f3; border: 1px solid var(--line); border-radius: 8px; min-width: 0; overflow-wrap: anywhere; }
 .summary-card strong { font-size: 14px; }
 .summary-card span { color: var(--muted); font-size: 12px; }
 .summary-card.fail { background: #fff4f1; border-color: #e9cdc5; }
 .report-summary .summary-card.fail span { color: #872d23; }
 .empty-result { background: #f4f7f4; padding: 13px; border-radius: 8px; font-size: 14px; line-height: 1.6; }
 .detail-pressures { font-size: 13px; margin: 5px 0; overflow-wrap: anywhere; }
+
+.reuse-hint { margin-bottom: 10px; }
+.limit-source, .handoff-actions { margin-top: 8px; }
+.limit-source { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.summary-text { display: grid; gap: 4px; min-width: 0; }
+.result-limits a { margin-inline-start: 6px; }
+.dialog-pipe { margin-top: 10px; }
