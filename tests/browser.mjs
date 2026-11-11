@@ -218,7 +218,7 @@ async function checkFormulaMenu(page, directory) {
   assert(await panel.isVisible());
   const picker = page.getByLabel('你要算什么？');
   await picker.locator('option').first().waitFor({ state: 'attached' });
-  assert.equal(await picker.locator('option').count(), 9);
+  assert.equal(await picker.locator('option').count(), 19);
   await page.getByRole('button', { name: '计算', exact: true }).click();
   assert.equal(await page.locator('#formula-fields [aria-invalid="true"]').count(), 2);
   await picker.selectOption('pump-power');
@@ -238,6 +238,16 @@ async function checkFormulaMenu(page, directory) {
   assert.equal(await picker.inputValue(), 'lmtd');
   assert.match(await page.locator('#formula-result').innerText(), /对数平均温差\s+37\.44/);
   assert.equal(await flow.inputValue(), '57');
+  await picker.selectOption('gas-flow');
+  await page.getByRole('button', { name: '载入算例' }).click();
+  assert.match(await page.locator('#formula-result').innerText(), /945\.10231/);
+  assert.match(await page.locator('#formula-substitution').innerText(), /308\.15 K/);
+  await picker.selectOption('horizontal-tank');
+  await page.getByRole('button', { name: '载入算例' }).click();
+  assert.match(await page.locator('#formula-result').innerText(), /2\.45674/);
+  await page.getByLabel('从筒底量起的液深 h').fill('2.1');
+  await page.getByRole('button', { name: '计算', exact: true }).click();
+  assert.match(await page.locator('#formula-result').innerText(), /液深不能超过筒体内径/);
   await page.setViewportSize({ width: 390, height: 844 });
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
   const bounds = await panel.boundingBox();

@@ -2,6 +2,8 @@ const GRAVITY = 9.80665;
 const flowUnits = { 'm³/h': 1 / 3600, 'L/s': 0.001, 'm³/s': 1 };
 const massUnits = { 'kg/h': 1 / 3600, 'kg/s': 1, 't/h': 1000 / 3600 };
 const diameterUnits = { mm: 0.001, m: 1 };
+const pressureUnits = { kPa: 1, bar: 100, MPa: 1000, Pa: 0.001 };
+const volumeUnits = { 'm³': 1, L: 0.001 };
 const percent = { '%': 0.01 };
 
 const field = (key, label, units, example, options = {}) => ({
@@ -16,6 +18,23 @@ const mass = (key, label, example, options) => field(key, label, massUnits, exam
 const pipeRef = ['EPA · EPANET 水力计算', 'https://usepa.github.io/EPANET2.2/12_analysis_algorithms.html'];
 const flowRef = ['NASA · 质量流量与连续性', 'https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/mass-flow-rate/'];
 const heatRef = ['MIT · 换热器能量衡算', 'https://ocw.mit.edu/courses/16-050-thermal-energy-fall-2002/87d9f4544b7fd64a77201382500d057c_10_part3.pdf'];
+const headRef = ['宾夕法尼亚州立大学 · 当量液柱高度', 'https://www.me.psu.edu/cimbala/me320/Lesson_Notes/Fluid_Mechanics_Lesson_02B.pdf'];
+const absolutePressure = (key, label, example) => field(key, label, pressureUnits, example, { basis: 'kPa' });
+const gasTemperature = (key, label, example) => field(key, label, { '°C': 1, K: 1 }, example, {
+  signed: true, offsets: { '°C': 273.15 }, basis: 'K',
+});
+
+function tankVolume({ d, length, h }) {
+  if (h > d) throw new Error('液深不能超过筒体内径。请核对液位零点和单位。');
+  const fraction = h / d;
+  const angle = 2 * Math.asin(Math.sqrt(Math.min(fraction, 1 - fraction)));
+  // The series avoids subtracting nearly equal terms at very low fill.
+  const sector = angle < 0.001 ? angle ** 3 * (2 / 3 - (2 / 15) * angle ** 2)
+    : angle - Math.sin(angle) * Math.cos(angle);
+  const filled = fraction > 0.5 ? 1 - sector / Math.PI : sector / Math.PI;
+  const capacity = Math.PI * (d / 2) ** 2 * length;
+  return [capacity * filled, capacity, 100 * filled];
+}
 
 function lmtd({ hotIn, hotOut, coldIn, coldOut }) {
   if (hotOut > hotIn || coldOut < coldIn) {
@@ -57,6 +76,36 @@ export const formulas = [
     calculate: ({ rho, v, d, mu }) => [rho * v * d / mu],
   },
   {
+    id: 'pipe-loss', group: '管道流动', name: '已知摩阻系数，算单段管道压降',
+    description: '适用于满流、等内径圆管中的稳态单相液体。f 填 Darcy 摩阻系数，K 填管件总局部阻力系数。无管件损失时 K 填 0。结果为阻力损失，不含高差。',
+    fields: [flow(55, { min: 0 }), density, diameter, field('length', '直管长度 L', 'm', 120, { min: 0 }),
+      field('f', 'Darcy 摩阻系数 f', '', 0.02), field('k', '总局部阻力系数 K', '', 4.8, { min: 0 })],
+    result: [['阻力压降', 'kPa'], ['沿程压降', 'kPa'], ['局部压降', 'kPa'], ['平均流速', 'm/s']],
+    equation: 'v = 4Q / (πD²)，沿程压降 = f(L/D)ρv²/2，局部压降 = Kρv²/2。压降从 Pa 换算成 kPa。',
+    reference: ['EPA · 管路摩阻与局部损失', 'https://usepa.github.io/EPANET2.2/3_network_model.html'],
+    calculate: ({ q, d, rho, length, f, k }) => {
+      const v = 4 * q / (Math.PI * d ** 2);
+      const dynamic = rho * v ** 2 / 2000;
+      const straight = f * (length / d) * dynamic;
+      const local = k * dynamic;
+      return [straight + local, straight, local, v];
+    },
+  },
+  {
+    id: 'hydrostatic-pressure', group: '管道流动', name: '已知液柱高度，算静压差',
+    description: '用于密度近似恒定的静止液体。计算低点相对高点的压力增量。',
+    fields: [field('h', '垂直液柱高度 h', 'm', 4, { min: 0 }), density],
+    result: [['静压差', 'kPa']], equation: 'Δp = ρgh，g = 9.80665 m/s²。将 Pa 换算成 kPa。',
+    reference: headRef, calculate: ({ h, rho }) => [rho * GRAVITY * h / 1000],
+  },
+  {
+    id: 'pressure-head', group: '管道流动', name: '压力差换算等效液柱高度',
+    description: '填两点压差的大小和对应液体的密度，用于换算压差对应的液柱高度。',
+    fields: [field('dp', '压力差 Δp', pressureUnits, 100, { basis: 'kPa', min: 0 }), density],
+    result: [['等效液柱高度', 'm']], equation: 'h = Δp / (ρg)。代入前将 kPa 换算成 Pa。',
+    reference: headRef, calculate: ({ dp, rho }) => [dp * 1000 / (rho * GRAVITY)],
+  },
+  {
     id: 'pump-power', group: '泵', name: '已知扬程，算泵轴功率',
     description: '填入同一工作点的流量、扬程和泵效率。轴功率是传给泵轴的功率。',
     fields: [flow(55), density, field('h', '泵扬程 H', 'm', 25),
@@ -68,6 +117,14 @@ export const formulas = [
       const hydraulic = rho * GRAVITY * q * h / 1000;
       return [hydraulic / eff, hydraulic];
     },
+  },
+  {
+    id: 'motor-input', group: '泵', name: '已知泵轴功率，算电机输入功率',
+    description: '用于电机与泵直联的工况。填写实际工作点的泵轴功率及电机效率。',
+    fields: [field('shaft', '泵轴功率', 'kW', 5.4), field('eff', '电机效率', percent, 90, { max: 100, basis: '（比例）' })],
+    result: [['电机输入功率', 'kW']], equation: '电机输入功率 = 泵轴功率 / 电机效率',
+    reference: ['美国能源部 · 电机驱动系统效率', 'https://www.energy.gov/sites/prod/files/2014/04/f15/amo_motors_guidebook_web.pdf'],
+    calculate: ({ shaft, eff }) => [shaft / eff],
   },
   {
     id: 'sensible-heat', group: '传热', name: '已知温差，算加热或冷却负荷',
@@ -100,11 +157,35 @@ export const formulas = [
     calculate: ({ heat, u, dt, f }) => [heat * 1000 / (u * f * dt)],
   },
   {
+    id: 'latent-heat', group: '传热', name: '已知相变焓差，算蒸发或冷凝负荷',
+    description: '按实际发生相变的质量流量计算热负荷大小。相变焓差取该工况的绝对值，进出口升降温所需的显热另算。',
+    fields: [mass('m', '发生相变的质量流量', 1800, { min: 0 }), field('dh', '单位质量相变焓差', 'kJ/kg', 2200)],
+    result: [['相变热负荷大小', 'kW']], equation: '相变热负荷 = 相变质量流量 × 单位质量相变焓差',
+    reference: ['OpenStax · 相变与潜热', 'https://openstax.org/books/university-physics-volume-2/pages/1-5-phase-changes'],
+    calculate: ({ m, dh }) => [m * dh],
+  },
+  {
+    id: 'mix-temperature', group: '传热', name: '估算同种液体的混合温度',
+    description: '适用于两股同种液体混合、比热容近似相同、无相变且可忽略对外换热的工况。',
+    fields: [mass('m1', '物流 1 质量流量', 600), field('t1', '物流 1 温度', '°C', 80, { min: -273.15 }),
+      mass('m2', '物流 2 质量流量', 400), field('t2', '物流 2 温度', '°C', 20, { min: -273.15 })],
+    result: [['混合温度', '°C']], equation: 'T混 = (ṁ₁T₁ + ṁ₂T₂) / (ṁ₁ + ṁ₂)',
+    reference: heatRef, calculate: ({ m1, m2, t1, t2 }) => [t2 + (t1 - t2) / (1 + m2 / m1)],
+  },
+  {
     id: 'mass-flow', group: '物料衡算', name: '体积流量换算质量流量',
     description: '密度与体积流量需对应同一温度、压力和组成。',
     fields: [flow(55, { min: 0 }), density], result: [['质量流量', 'kg/h'], ['质量流量', 'kg/s']],
     equation: 'ṁ = ρQ', reference: flowRef,
     calculate: ({ q, rho }) => [q * rho * 3600, q * rho],
+  },
+  {
+    id: 'volume-flow', group: '物料衡算', name: '质量流量换算体积流量',
+    description: '填写所需工况下的流体密度，得到该工况下的体积流量。',
+    fields: [mass('m', '质量流量 ṁ', 49850, { min: 0 }), density],
+    result: [['体积流量', 'm³/h'], ['体积流量', 'L/s']],
+    equation: 'Q = ṁ / ρ。将 m³/s 换算成 m³/h 和 L/s。',
+    reference: flowRef, calculate: ({ m, rho }) => [3600 * (m / rho), 1000 * (m / rho)],
   },
   {
     id: 'blend', group: '物料衡算', name: '计算两股物流混合后的质量分数',
@@ -121,6 +202,34 @@ export const formulas = [
       return [100 * ((m1 / total) * w1 + (m2 / total) * w2), total * 3600];
     },
   },
+  {
+    id: 'gas-flow', group: '气体换算', name: '气体流量换算到指定温压',
+    description: '适用于组成不变且可按理想气体处理的工况。两处压力都填绝压，目标温度和压力按项目规定填写。',
+    fields: [flow(500, { min: 0 }), absolutePressure('p1', '原工况绝压', 201.325),
+      gasTemperature('t1', '原工况温度', 35), absolutePressure('p2', '目标工况绝压', 101.325),
+      gasTemperature('t2', '目标工况温度', 20)],
+    result: [['目标工况体积流量', 'm³/h']], equation: 'Q₂ = Q₁ × (p₁/p₂) × (T₂/T₁)，温度用 K。',
+    reference: ['NASA · 理想气体状态方程', 'https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/equation-of-state-ideal-gas-2/'],
+    calculate: ({ q, p1, p2, t1, t2 }) => [3600 * q * (p1 / p2) * (t2 / t1)],
+  },
+  {
+    id: 'residence-time', group: '容器与停留时间', name: '已知有效容积，估算停留时间',
+    description: '适用于稳态且液位基本恒定的单相流。填写参与流动的有效容积和总入口体积流量。',
+    fields: [field('volume', '有效容积 V', volumeUnits, 12, { basis: 'm³' }), flow(24)],
+    result: [['名义停留时间', 'min'], ['名义停留时间', 'h']], equation: 'τ = V / Q。将秒换算成分钟和小时。',
+    reference: ['EPA · 理论停留时间', 'https://nepis.epa.gov/Exe/ZyPURL.cgi?Dockey=P1019L0Q.TXT'],
+    calculate: ({ volume, q }) => [volume / q / 60, volume / q / 3600],
+  },
+  {
+    id: 'horizontal-tank', group: '容器与停留时间', name: '已知液位，算卧式圆筒液量',
+    description: '液深从水平筒体内底量起。只计算等径圆筒段，带封头的设备需另计封头容积。',
+    fields: [field('d', '筒体内径 D', 'm', 2), field('length', '等径筒段内长 L', 'm', 4),
+      field('h', '从筒底量起的液深 h', 'm', 0.5, { min: 0 })],
+    result: [['筒段液体体积', 'm³'], ['筒段全容积', 'm³'], ['筒段充装比例', '%']],
+    equation: 'r = D/2，θ = arccos(1 − h/r)，液量 = Lr²(θ − sinθ cosθ)，θ 用弧度。',
+    reference: ['Perry 化工手册 · 储运设备', 'https://schneider.cheme.cmu.edu/Files/Perry%27s%20Chemical%20Engineers%27%20Handbook%207th%20Edition/10.%20Transport%20and%20Storage%20of%20Fluids.pdf'],
+    calculate: tankVolume,
+  },
 ];
 
 export function calculateFormula(formula, values) {
@@ -134,7 +243,12 @@ export function calculateFormula(formula, values) {
     else if (item.min == null && !item.signed && number <= 0) errors[item.key] = '请输入大于 0 的数值。';
     else if (item.max != null && number > item.max) errors[item.key] = '请输入不大于 ' + item.max + ' 的数值。';
     else if (!Object.hasOwn(item.units, unit)) errors[item.key] = '请选择有效单位。';
-    else inputs.push([item.key, number * item.units[unit]]);
+    else {
+      const normalized = number * item.units[unit] + (item.offsets?.[unit] ?? 0);
+      if (!Number.isFinite(normalized)) errors[item.key] = '换算后的数值超出可计算范围。';
+      else if (item.offsets && normalized <= 0) errors[item.key] = '绝对温度须大于 0 K。';
+      else inputs.push([item.key, normalized]);
+    }
   }
   if (Object.keys(errors).length) return { errors };
   try {
