@@ -153,3 +153,25 @@ tbody td { overflow-wrap: anywhere; }
 .summary-text { display: grid; gap: 4px; min-width: 0; }
 .result-limits a { margin-inline-start: 6px; }
 .dialog-pipe { margin-top: 10px; }
+
+.brand { text-decoration: none; color: var(--text); }
+.header-tools { display: flex; align-items: center; gap: 12px; }
+.formula-workspace { max-width: 1100px; margin-inline: auto; padding: clamp(18px, 4vw, 46px); }
+.formula-columns { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 14px; align-items: start; }
+.formula-picker { margin-bottom: 20px; }
+.formula-fields { margin: 15px 0; }
+.formula-input { display: flex; align-items: stretch; min-width: 0; }
+.formula-input input { flex: 1; min-width: 0; }
+.formula-input select, .formula-unit { flex: 0 1 auto; width: auto; max-width: 56%; margin-left: 4px; }
+.formula-unit { display: flex; align-items: center; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.formula-metric { padding: 10px 13px; background: #edf5ef; border-radius: 9px; margin: 8px 0; }
+.formula-number { font: 650 clamp(20px, 3.2vw, 32px)/1.3 var(--mono); overflow-wrap: anywhere; }
+.formula-number small { color: var(--muted); margin-left: 7px; font-size: .55em; }
+.formula-output h2 { margin-bottom: 10px; }
+.formula-equation { font: 14px/1.65 var(--mono); margin: 5px 0; overflow-wrap: anywhere; }
+#formula-substitution { margin-bottom: 7px; overflow-wrap: anywhere; }
+@media (max-width: 690px) {
+  .formula-columns { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .formula-columns .field input, .formula-columns .field select { font-size: 16px; }
+  .header-tools .local-state { display: none; }
+}

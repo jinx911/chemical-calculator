@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="计算流速、雷诺数、泵轴功率、换热面积和物料衡算等常用化工公式。">
+  <title>公式计算 · 化工工艺工作台</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./src/formula-page.mjs"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-content">
+      <a class="brand" href="./" aria-label="化工工艺工作台首页">
+        <span class="brand-icon" aria-hidden="true">∿</span>
+        <span>ChemCalc<small>化工工艺工作台</small></span>
+      </a>
+      <nav class="toolbar" aria-label="工作台导航">
+        <a class="button" href="./">管径比选</a>
+        <a class="button primary" href="./formulas.html" aria-current="page">公式计算</a>
+      </nav>
+    </div>
+  </header>
+  <main class="formula-workspace">
+    <header class="page-title">
+      <h1>化工公式计算</h1>
+      <p class="muted">按要算的量选公式，再填入已知参数。</p>
+    </header>
+    <div class="formula-columns">
+      <section class="section" aria-label="选择公式与输入参数">
+        <div class="field formula-picker">
+          <label for="formula-picker">你要算什么？</label>
+          <select id="formula-picker"></select>
+        </div>
+        <p id="formula-description" class="muted"></p>
+        <form id="formula-form" novalidate>
+          <div class="grid formula-fields" id="formula-fields"></div>
+          <div class="toolbar">
+            <button class="button primary" type="submit">计算</button>
+            <button class="button" id="formula-example" type="button">载入算例</button>
+          </div>
+        </form>
+      </section>
+      <section class="section formula-output" aria-labelledby="formula-result-title">
+        <h2 id="formula-result-title">计算结果</h2>
+        <div id="formula-result" aria-live="polite"></div>
+        <details open>
+          <summary>计算依据</summary>
+          <p id="formula-equation" class="formula-equation"></p>
+          <p id="formula-substitution" class="hint" hidden></p>
+          <a id="formula-reference" class="hint" target="_blank" rel="noopener"></a>
+        </details>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

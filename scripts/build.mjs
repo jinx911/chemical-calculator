@@ -3,9 +3,9 @@ import { copyFile, mkdir, rm } from 'node:fs/promises';
 const root = new URL('../', import.meta.url);
 const target = new URL('dist/', root);
 const publishedFiles = [
-  'index.html', 'styles.css', 'print.css',
+  'index.html', 'formulas.html', 'styles.css', 'print.css',
   'src/app.mjs', 'src/model.mjs', 'src/hydraulics.mjs', 'src/presentation.mjs',
-  'src/storage.mjs', 'src/project-file.mjs', 'src/report.mjs',
+  'src/formulas.mjs', 'src/formula-page.mjs', 'src/storage.mjs', 'src/project-file.mjs', 'src/report.mjs',
 ];
 
 await rm(target, { recursive: true, force: true });

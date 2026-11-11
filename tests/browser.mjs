@@ -206,6 +206,36 @@ async function checkStart(page, directory) {
   await page.getByRole('button', { name: '化工工艺工作台首页' }).click();
 }
 
+async function checkFormulaMenu(page, directory) {
+  const flow = page.getByLabel('体积流量', { exact: true }).last();
+  await flow.fill('56');
+  await page.getByRole('link', { name: '公式计算', exact: true }).click();
+  const picker = page.getByLabel('你要算什么？');
+  await picker.waitFor();
+  assert.equal(await picker.locator('option').count(), 9);
+  await page.getByRole('button', { name: '计算', exact: true }).click();
+  assert.equal(await page.locator('#formula-fields [aria-invalid="true"]').count(), 2);
+  await picker.selectOption('pump-power');
+  await page.getByRole('button', { name: '载入算例' }).click();
+  assert.match(await page.locator('#formula-result').innerText(), /泵轴功率\s+5\.33\d*\s*kW/);
+  assert.match(await page.locator('#formula-substitution').innerText(), /m³\/s/);
+  await page.getByLabel('泵效率 η').fill('101');
+  await page.getByRole('button', { name: '计算', exact: true }).click();
+  assert.match(await page.locator('#formula-field-eff-error').innerText(), /100/);
+  await picker.selectOption('lmtd');
+  await page.getByRole('button', { name: '载入算例' }).click();
+  assert.match(await page.locator('#formula-result').innerText(), /对数平均温差\s+37\.44/);
+  await page.reload();
+  assert.equal(await picker.inputValue(), 'lmtd');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: '载入算例' }).click();
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+  if (directory) await page.screenshot({ path: resolve(directory, 'formulas-mobile.png'), fullPage: true });
+  await page.getByRole('link', { name: '管径比选', exact: true }).click();
+  await flow.waitFor();
+  assert.equal(await flow.inputValue(), '56');
+}
+
 const external = process.env.PAGES_TEST_URL;
 const local = external ? null : await preview();
 const url = external || local.url;
@@ -227,10 +257,11 @@ try {
   await checkReport(page, directory, 2);
   await checkBackup(browser, page, url);
   if (directory) await page.screenshot({ path: resolve(directory, 'workbench.png'), fullPage: true });
+  await checkFormulaMenu(page, directory);
   assert.deepEqual(errors, []);
   assert(requests.every(([method, address]) => method === 'GET' && address.startsWith(url)),
     'the application should only fetch its own static assets');
-  console.log('Browser verified: calculation, reloading versions, printable report, backup and mobile layout.');
+  console.log('Browser verified: pipe workflow, reports, backup, formula menu and mobile layout.');
 } finally {
   await browser.close();
   if (local) await new Promise(done => local.server.close(done));
