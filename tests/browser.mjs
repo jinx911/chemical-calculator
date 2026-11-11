@@ -47,7 +47,7 @@ async function checkVersions(page) {
   ];
   await page.locator('#open-example').click();
   await expectRows(page, initial);
-  await page.locator('#results tbody tr').first().getByRole('button', { name: '查看公式' }).click();
+  await page.locator('#results tbody tr').first().getByRole('button', { name: '查看计算依据' }).click();
   assert.match(await page.locator('#formula-detail').innerText(), /摩阻因子.*|沿程损失/);
 
   const flows = page.locator('input[data-path^="scenarios."][data-path$=".flow"]');
@@ -68,6 +68,7 @@ async function checkVersions(page) {
   await expectRows(page, [
     ...initial.slice(0, 2), ['最大工况', '102.3 mm', 45.64, /超限/], ['最大工况', '128.2 mm', 15.82, /满足/],
   ]);
+  assert.match(await page.locator('.summary-card.fail').innerText(), /最大工况 压降超限/);
   await page.locator('#save-version').click();
   await page.locator('#version-to option[value="2"]').waitFor({ state: 'attached' });
   const changes = page.locator('#version-diff tbody tr');
@@ -103,7 +104,7 @@ async function checkReport(page, directory, version) {
 
 async function checkBackup(browser, page, url) {
   const downloadReady = page.waitForEvent('download');
-  await page.locator('#export-project').click();
+  await page.getByRole('button', { name: '下载项目文件' }).click();
   const downloaded = await downloadReady;
   const file = await readFile(await downloaded.path());
   const data = JSON.parse(file);
@@ -111,11 +112,12 @@ async function checkBackup(browser, page, url) {
   const other = await browser.newPage({ viewport: { width: 390, height: 844 } });
   other.setDefaultTimeout(10000);
   await other.goto(url);
-  await other.locator('#open-example').waitFor();
+  const openFile = other.getByRole('button', { name: '打开项目文件' });
+  await openFile.waitFor();
+  assert.doesNotMatch(await other.locator('body').innerText(), /JSON/i);
   await other.locator('#import-project').setInputFiles({
     name: '循环冷却水改造.json', mimeType: 'application/json', buffer: file,
   });
-  await other.getByRole('button', { name: /冷却水供水支线/ }).first().click();
   await other.locator('#results').waitFor();
   const results = await other.locator('#results').innerText();
   assert.match(results, /45\.64/);
@@ -125,9 +127,21 @@ async function checkBackup(browser, page, url) {
   await other.locator('#import-project').setInputFiles({
     name: '循环冷却水改造.json', mimeType: 'application/json', buffer: Buffer.from('{'),
   });
-  await other.locator('#notice').filter({ hasText: '无法读取项目文件' }).waitFor();
+  await other.locator('#notice').filter({ hasText: '打不开这个项目文件' }).waitFor();
   assert.match(await other.locator('#results').innerText(), /45\.64/);
   await other.close();
+}
+
+async function checkStart(page) {
+  await page.getByRole('button', { name: '开始管径比选' }).click();
+  await page.getByLabel('项目名称').fill('冷却水泵房改造');
+  await page.getByRole('button', { name: '填写计算条件' }).click();
+  const flow = page.getByLabel('体积流量', { exact: true });
+  await flow.waitFor();
+  assert(await flow.evaluate(input => input === document.activeElement));
+  assert.match(await page.locator('#results').innerText(), /这里会显示比选结果/);
+  assert(await page.locator('#save-version').isDisabled());
+  await page.getByRole('button', { name: '化工工艺工作台首页' }).click();
 }
 
 const external = process.env.PAGES_TEST_URL;
@@ -145,6 +159,7 @@ try {
   page.on('request', request => requests.push([request.method(), request.url()]));
   await page.addInitScript(() => { window.print = () => { window.printRequested = true; }; });
   await page.goto(url);
+  await checkStart(page);
   await checkVersions(page);
   await checkReport(page, directory, 1);
   await checkReport(page, directory, 2);

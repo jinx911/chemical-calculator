@@ -92,7 +92,8 @@ function normalizeOption(option, issues) {
     issue('roughness', '绝对粗糙度须小于实际内径。');
     roughness = null;
   }
-  const overrides = Object.fromEntries(Object.entries(option.kOverrides).map(([id, override]) => [
+  const activeOverrides = Object.entries(option.kOverrides).filter(([, override]) => String(override.k ?? '').trim() !== '');
+  const overrides = Object.fromEntries(activeOverrides.map(([id, override]) => [
     id, normalizeK(override.k, override.source, override.regime, 'kOverrides.' + id + '.k', read, issue),
   ]));
   return {

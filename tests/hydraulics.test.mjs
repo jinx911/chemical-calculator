@@ -130,6 +130,11 @@ test('缺失 K 保留沿程损失，工况覆盖可明确使用 K=0，流态限�
   assert.equal(covered.localLoss, 0);
   assert.equal(covered.loss, covered.frictionLoss);
   assert.equal(covered.input.kSource, '直管无管件');
+  option.k = '4.8';
+  option.kOverrides[scenario.id].k = '';
+  const cleared = calculate(draft, limits).rows[0];
+  assert.equal(cleared.input.k, 4.8);
+  assert.ok(cleared.localLoss > 0);
 });
 
 test('不合法输入按路径报告，并与有效工况隔离', () => {

@@ -229,11 +229,11 @@ export function parseBackup(input, makeId = () => crypto.randomUUID()) {
   try {
     payload = JSON.parse(input);
   } catch {
-    throw new Error('无法读取项目文件。请选择有效的 JSON 备份。');
+    throw new Error('打不开这个项目文件。请选择从工作台下载的项目文件。');
   }
   const source = object(payload, '顶层内容');
-  if (source.format !== FORMAT) throw new Error('这个 JSON 文件不是工艺计算工作台的项目备份。');
-  if (source.schemaVersion !== SCHEMA_VERSION) throw new Error('此项目文件版本不受支持。请使用兼容版本的工作台。');
+  if (source.format !== FORMAT) throw new Error('请选择从工艺计算工作台下载的项目文件。');
+  if (source.schemaVersion !== SCHEMA_VERSION) throw new Error('当前工作台打不开这一版项目文件。请用较新的工作台打开后重新下载。');
   date(source.exportedAt, 'exportedAt');
   const project = fields(source.project, 'project', projectFields);
   const worksheets = list(source.worksheets, 'worksheets', (entry, at) => fields(entry, at, worksheetFields));

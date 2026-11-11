@@ -139,7 +139,7 @@ function renderSidebar() {
   const projectButtons = state.projects.map(project =>
     `<button type="button" data-action="open-project" data-id="${esc(project.id)}" ${project.id === state.project?.id && !state.worksheet ? 'aria-current="page"' : ''}>${esc(project.name)}</button>`);
   const sheetButtons = state.worksheets.map(sheet =>
-    `<button type="button" data-action="open-worksheet" data-id="${esc(sheet.id)}" ${sheet.id === state.worksheet?.id ? 'aria-current="page"' : ''}>${esc(safeName(sheet.draft.line, '新计算单'))}<small>${sheet.sequence ? `已保存 V${sheet.sequence}` : '草稿'}</small></button>`);
+    `<button type="button" data-action="open-worksheet" data-id="${esc(sheet.id)}" ${sheet.id === state.worksheet?.id ? 'aria-current="page"' : ''}>${esc(safeName(sheet.draft.line, '新计算单'))}<small>${sheet.sequence ? `已存 ${sheet.sequence} 个版本` : '草稿'}</small></button>`);
   sidebar.innerHTML = `
     <button type="button" class="side-action" data-action="home">工作台首页</button>
     <h2>项目</h2><div class="side-list">${projectButtons.join('')}${!projectButtons.length ? '<p class="hint">暂无项目</p>' : ''}</div>
@@ -151,15 +151,17 @@ function renderSidebar() {
 function renderHome() {
   return `
     <section class="hero" aria-labelledby="home-title">
-      <h1 id="home-title">管径与压降</h1>
-      <p>比选单相液体管线的候选管径，核对各工况的流速与压降，保存版本并生成计算书。</p>
+      <h1 id="home-title">比较管径，校核压降</h1>
+      <p>填入正常和最大流量，比较不同管径下的流速和压降，看看哪些方案满足你的项目限值。</p>
       <div class="toolbar">
-        ${action('打开冷却水算例', 'example', 'primary', 'id="open-example"')}
-        ${action('新建项目', 'new-project', 'secondary')}
-        ${action('导入项目 JSON', 'select-import', 'secondary')}
+        ${action('开始管径比选', 'start-calculation', 'primary')}
+        ${action('试算冷却水管线', 'example', 'secondary', 'id="open-example"')}
       </div>
     </section>
-    <p class="muted home-notes">项目保存在此浏览器。导出 JSON 可备份和交接；清除站点数据前请先备份。</p>
+    <section class="section home-files">
+      <header class="section-head"><div><h2>继续已有项目</h2><p class="muted">用自己保存或同事发来的项目文件继续修改和计算。</p></div>
+      ${action('打开项目文件', 'select-import')}</header>
+    </section>
   `;
 }
 
@@ -175,11 +177,18 @@ function renderProject() {
   const sheets = state.worksheets.map(sheet => `<li>${action(esc(safeName(sheet.draft.line, '新计算单')), 'open-worksheet', '', `data-id="${esc(sheet.id)}"`)} <span class="hint">${sheet.sequence ? `V${sheet.sequence}` : '草稿'}</span></li>`);
   return `
     <div class="page-title"><p class="crumb">本机项目</p><h1>${esc(project.name)}</h1></div>
-    <div class="toolbar top-actions">${action('新建计算单', 'new-worksheet', 'primary')}${action('导出项目 JSON', 'export', '', 'id="export-project"')}${action('导入项目 JSON', 'select-import')}</div>
-    ${section('项目限值', projectLimits(project))}
+    <div class="toolbar top-actions">${action('添加管线计算', 'new-worksheet', 'primary')}</div>
     ${section('计算单', sheets.length ? `<ul>${sheets.join('')}</ul>` : '<p class="muted">创建计算单后可填写工况和候选管径。</p>')}
+    ${section('项目限值', projectLimits(project))}
+    ${renderProjectFile()}
     <p class="hint" id="save-status" role="status">保存在此浏览器</p>
   `;
+}
+
+function renderProjectFile() {
+  return section('备份或交给同事继续算',
+    '<p class="muted">项目文件包含输入、草稿和历史版本。换电脑或交给同事时，从工作台首页点「打开项目文件」即可继续。</p>',
+    action('下载项目文件', 'export', '', 'id="export-project"'));
 }
 
 function inputUnit(path, key, row) {
@@ -200,15 +209,15 @@ function scenarioCard(row, index, count) {
 }
 
 function overrides(row, scenarios, path) {
-  return `<details data-key="${esc(path)}-overrides"><summary>按工况覆盖局部阻力系数</summary>
+  return `<details data-key="${esc(path)}-overrides"><summary>给个别工况单独填写 K 值</summary>
     ${scenarios.map((scenario, index) => {
       const item = row.kOverrides[scenario.id] ?? {};
       const base = `${path}.kOverrides.${scenario.id}`;
       return `<div class="grid"><h3 class="wide" data-override-scenario="${esc(scenario.id)}">${esc(safeName(scenario.name, `工况 ${index + 1}`))}</h3>
-        ${field('覆盖 K', `${base}.k`, item.k ?? '', { numeric: true })}
+        ${field('该工况的 K 值', `${base}.k`, item.k ?? '', { numeric: true })}
         ${field('适用流态', `${base}.regime`, item.regime ?? 'any', { select: regimeChoices })}
-        ${field('覆盖值依据', `${base}.source`, item.source ?? '', { wide: true })}</div>`;
-    }).join('')}<p class="hint">覆盖值留空时使用该方案默认 K。</p></details>`;
+        ${field('K 值依据', `${base}.source`, item.source ?? '', { wide: true })}</div>`;
+    }).join('')}<p class="hint">该工况的 K 值留空时，使用方案的默认值。</p></details>`;
 }
 
 function optionCard(row, index, count, scenarios) {
@@ -221,7 +230,7 @@ function optionCard(row, index, count, scenarios) {
       ${field('管长（m）', `${path}.length`, row.length, { numeric: true })}
       ${field('绝对粗糙度', `${path}.roughness`, row.roughness, { numeric: true, unit: inputUnit(path, 'roughness', row) })}
       ${field('出口减入口高差（m）', `${path}.elevation`, row.elevation, { numeric: true })}
-      ${field('默认局部阻力系数 K', `${path}.k`, row.k, { numeric: true })}
+      ${field('管件总阻力系数 K', `${path}.k`, row.k, { numeric: true })}
       ${field('适用流态', `${path}.kRegime`, row.kRegime, { select: regimeChoices })}
       ${field('K 值依据', `${path}.kSource`, row.kSource, { wide: true })}
     </div>${overrides(row, scenarios, path)}</article>`;
@@ -232,7 +241,8 @@ function worksheetLimits(draft) {
     ${[['velocity', '流速', 'm/s'], ['pressure', '阻力压降', 'kPa']].map(([key, label, unit]) => {
       const setting = draft.limits[key];
       return field(`${label}判据`, `limits.${key}.mode`, setting.mode, { select: limitModes })
-        + field(`${label}上限（${unit}）`, `limits.${key}.value`, setting.value, { numeric: true, disabled: setting.mode !== 'custom' });
+        + field(`${label}上限（${unit}）`, `limits.${key}.value`, setting.mode === 'inherit' ? state.project.limits[key] : setting.mode === 'custom' ? setting.value : '',
+          { numeric: true, disabled: setting.mode !== 'custom' });
     }).join('')}
   </div><p class="hint">两项都可判定且满足时，才显示「满足」。高差压力项不计入阻力压降上限。</p>`;
 }
@@ -248,31 +258,37 @@ function renderWorksheet() {
   return `
     <div class="page-title">
       <p class="crumb">${esc(state.project.name)} / 管径与压降</p>
-      <h1 id="sheet-title">${esc(safeName(draft.line, '新计算单'))}</h1>
-      <p class="muted">稳态、单相、不可压牛顿液体 · 满流等内径圆管单段</p>
-      <div class="toolbar top-actions">
-        ${action('保存版本', 'save-version', 'primary', 'id="save-version"')}
-        <a class="button" href="#results-panel">查看比选</a><a class="button" href="#versions-panel">版本与计算书</a>
-        ${action('导出项目 JSON', 'export', '', 'id="export-project"')}
+      <h1 id="sheet-title">${esc(safeName(draft.line, '新建管线比选'))}</h1>
+      <nav class="toolbar top-actions" aria-label="计算单操作">
+        <a class="button" href="#conditions-panel">填写计算条件</a>
+        <a class="button" href="#versions-panel">历史版本与计算书</a>
         <span class="hint" id="save-status" role="status">${state.draftDirty ? '正在保存草稿…' : '草稿已保存到此浏览器'}</span>
-      </div>
+      </nav>
     </div>
-    ${section('管线资料', `<div class="grid">
-      ${field('管线编号或名称', 'line', draft.line)}${field('液体介质', 'medium', draft.medium)}
-      ${field('入口位置', 'from', draft.from)}${field('出口位置', 'to', draft.to)}
-    </div>`)}
-    ${section('工况', `<div class="cards">${draft.scenarios.map((row, index) => scenarioCard(row, index, draft.scenarios.length)).join('')}</div>`, action('＋ 添加工况', 'add-scenario', 'small'))}
-    ${section('候选管径', `<div class="cards">${draft.options.map((row, index) => optionCard(row, index, draft.options.length, draft.scenarios)).join('')}</div>`, action('＋ 添加方案', 'add-option', 'small'))}
-    ${section('校核限值', worksheetLimits(draft))}
     <section class="section results-panel" id="results-panel" aria-labelledby="results-title">
-      <header class="result-head"><h2 id="results-title">工况比选</h2><p class="muted">Darcy–Weisbach · 展开任意组合查看计算依据</p></header>
+      <header class="section-head result-head"><div><h2 id="results-title">管径比选结果</h2><p class="muted">更改流量、管径或限值后，结果会自动更新。</p></div>
+        ${action('保存本次结果', 'save-version', 'primary', 'id="save-version"')}
+      </header>
       <div id="results"></div>
     </section>
+    <div class="conditions-head" id="conditions-panel">
+      <h2>计算条件</h2><a href="#results-panel">返回比选结果</a>
+    </div>
+    ${section('工况', `<div class="cards">${draft.scenarios.map((row, index) => scenarioCard(row, index, draft.scenarios.length)).join('')}</div>`, action('＋ 添加工况', 'add-scenario', 'small'))}
+    ${section('候选管径', `<div class="cards">${draft.options.map((row, index) => optionCard(row, index, draft.options.length, draft.scenarios)).join('')}</div>`, action('＋ 添加候选管径', 'add-option', 'small'))}
+    ${section('校核限值', worksheetLimits(draft))}
+    <details class="section pipe-details" data-key="pipe-details"><summary>管线名称、介质和起终点</summary>
+      <div class="grid">
+      ${field('管线编号或名称', 'line', draft.line)}${field('液体介质', 'medium', draft.medium)}
+      ${field('入口位置', 'from', draft.from)}${field('出口位置', 'to', draft.to)}
+      </div>
+    </details>
     ${section('选型记录', `<div class="grid">
       ${field('选定方案', 'selection.optionId', draft.selection.optionId || '', { select: selection })}
       ${field('选型理由', 'selection.reason', draft.selection.reason, { textarea: true })}
     </div>`)}
-    ${section('版本与计算书', '<div id="versions"></div>', '', 'id="versions-panel"')}
+    ${section('历史版本与计算书', '<div id="versions"></div>', '', 'id="versions-panel"')}
+    ${renderProjectFile()}
   `;
 }
 
@@ -280,6 +296,13 @@ function compareValue(value, limit, digits, formatter) {
   const displayed = formatter(value, digits);
   if (value == null || limit == null || value === limit || displayed !== formatter(limit, digits)) return displayed;
   return Number(value.toPrecision(14)).toString();
+}
+
+function rowConclusion(row) {
+  if (row.velocityStatus === 'fail' && row.pressureStatus === 'fail') return '流速和压降均超限';
+  if (row.velocityStatus === 'fail') return '流速超限';
+  if (row.pressureStatus === 'fail') return '压降超限';
+  return row.status === 'pass' ? '满足限值' : '待核对';
 }
 
 function renderRow(row, limits) {
@@ -290,10 +313,7 @@ function renderRow(row, limits) {
     <td>${esc(row.scenarioName)}</td><td>${esc(row.optionName)}</td>
     <td class="num">${esc(compareValue(row.velocity, limits.velocity, 3, formatNumber))}</td>
     <td class="num">${esc(compareValue(loss, limit, 2, formatNumber))}</td>
-    <td class="num">${esc(pressure(row.frictionLoss))}</td><td class="num">${esc(pressure(row.localLoss))}</td>
-    <td class="num">${esc(pressure(row.elevationPressure))}</td>
-    <td class="num">${esc(pressure(row.staticDifference))}</td>
-    <td>${badge(row.status)}</td><td>${action('查看公式', 'row-details', 'small', `data-id="${esc(key)}" aria-controls="formula-detail" aria-expanded="${key === state.openRow}"`)}</td>
+    <td><span class="status ${esc(row.status)}">${rowConclusion(row)}</span></td><td>${action('查看计算依据', 'row-details', 'small', `data-id="${esc(key)}" aria-controls="formula-detail" aria-expanded="${key === state.openRow}"`)}</td>
   </tr>`;
 }
 
@@ -303,6 +323,7 @@ function renderFormula(row, limits) {
   panel.className = 'result-detail';
   panel.innerHTML = `
     <h3>${esc(row.scenarioName)} · ${esc(row.optionName)}</h3>
+    <p class="detail-pressures">沿程损失 ${esc(pressure(row.frictionLoss))} kPa · 局部损失 ${esc(pressure(row.localLoss))} kPa · 高差压力项 ${esc(pressure(row.elevationPressure))} kPa · 进出口静压差 ${esc(pressure(row.staticDifference))} kPa</p>
     <p class="hint">${esc(regimeLabel(row.regime))} · 流速 ${badge(row.velocityStatus)} · 阻力压降 ${badge(row.pressureStatus)}</p>
     <p class="hint">生效限值：流速 ${limits.velocity == null ? '未设置' : `${esc(formatNumber(limits.velocity, 8))} m/s`}，阻力压降 ${limits.pressure == null ? '未设置' : `${esc(pressure(limits.pressure, 8))} kPa`}</p>
     ${row.diagnostics?.length ? `<ul class="hint">${row.diagnostics.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : ''}
@@ -317,7 +338,7 @@ function displayIssues(issues) {
     const lookup = path.startsWith('limits.') && path.endsWith('.value') && !input.disabled
       ? path.slice(0, -'.value'.length) : path;
     fieldPaths.add(lookup);
-    const message = messages.get(lookup);
+    const message = input.value.trim() === '' ? null : messages.get(lookup);
     const output = input.id ? document.getElementById(`${input.id}-error`) : null;
     if (output) output.textContent = message || '';
     if (message) input.setAttribute('aria-invalid', 'true');
@@ -340,17 +361,24 @@ function renderResults() {
   document.querySelector('#save-version').disabled = !complete;
   const summary = result.summaries.map(({ optionId, status }) => {
     const candidate = draft.options.find(option => option.id === optionId);
-    return `<span>${esc(safeName(candidate?.name, '候选管径'))} · ${badge(status)}</span>`;
+    const rows = result.rows.filter(row => row.optionId === optionId);
+    const failed = rows.filter(row => row.status === 'fail');
+    const note = status === 'pass' ? '所有工况均满足限值'
+      : failed.length ? failed.map(row => row.scenarioName + ' ' + rowConclusion(row)).join('；')
+      : '部分工况缺少条件或限值';
+    return `<div class="summary-card ${esc(status)}">
+      <strong>${esc(safeName(candidate?.name, '候选管径'))}</strong><span>${esc(note)}</span>
+    </div>`;
   }).join('');
   target.innerHTML = `
     ${unplaced}
-    ${!complete ? '<p class="hint">请检查标出的输入。完整且有效的计算单可保存版本。</p>' : ''}
-    ${summary ? `<div class="report-summary">${summary}</div>` : ''}
-    ${result.rows.length ? `<div class="table-wrap" tabindex="0" aria-label="工况比选表">
+    ${!valid ? '<div class="empty-result"><p>填好流量、物性和候选管径后，这里会显示比选结果。</p><a href="#conditions-panel">填写流量和管径</a></div>' : ''}
+    ${valid && !complete ? '<p class="hint">部分条件还没填完。检查并补齐后，即可保存本次结果。</p>' : ''}
+    ${valid && summary ? `<div class="report-summary">${summary}</div>` : ''}
+    ${valid ? `<div class="table-wrap" tabindex="0" aria-label="工况比选表">
       <table><thead><tr><th scope="col">工况</th><th scope="col">候选管径</th><th scope="col">流速（m/s）</th>
-      <th scope="col">阻力压降（kPa）</th><th scope="col">沿程损失（kPa）</th><th scope="col">局部损失（kPa）</th>
-      <th scope="col">高差压力（kPa）</th><th scope="col">进出口静压差（kPa）</th>
-      <th scope="col">校核</th><th scope="col">计算依据</th></tr></thead>
+      <th scope="col">阻力压降（kPa）</th>
+      <th scope="col">校核结论</th><th scope="col">计算依据</th></tr></thead>
       <tbody>${result.rows.map(row => renderRow(row, result.limits)).join('')}</tbody></table>
     </div>` : ''}
     <div id="formula-detail"${active ? '' : ' hidden'}></div>`;
@@ -368,7 +396,7 @@ function renderDiff() {
   }
   const changes = compareRevisions(before, after);
   panel.innerHTML = changes.length ? `<div class="table-wrap" tabindex="0" aria-label="版本差异表">
-    <table><thead><tr><th scope="col">变更项</th><th scope="col">V${before.sequence}</th><th scope="col">V${after.sequence}</th></tr></thead>
+    <table><thead><tr><th scope="col">变更项</th><th scope="col">第 ${before.sequence} 版</th><th scope="col">第 ${after.sequence} 版</th></tr></thead>
     <tbody>${changes.map(change => `<tr><td>${esc(change.field)}</td><td>${esc(change.before)}</td><td>${esc(change.after)}</td></tr>`).join('')}</tbody></table>
     </div>` : '<p class="hint">两个版本的输入、结果和选型记录一致。</p>';
 }
@@ -377,18 +405,18 @@ function renderVersions() {
   const panel = document.querySelector('#versions');
   if (!panel) return;
   if (!state.revisions.length) {
-    panel.innerHTML = '<p class="muted">保存首个版本后，即可导出计算书。保存第二个版本后可比较变更。</p>';
+    panel.innerHTML = '<p class="muted">在比选结果中点击「保存本次结果」，这里就能生成该版的计算书。条件变更后再保存一版，就能查看前后差异。</p>';
     return;
   }
   const [latest, previous] = state.revisions;
   if (!state.revisions.some(snapshot => snapshot.sequence === state.to)) state.to = latest.sequence;
   if (!state.revisions.some(snapshot => snapshot.sequence === state.from)) state.from = (previous ?? latest).sequence;
-  const choices = state.revisions.map(snapshot => [snapshot.sequence, `V${snapshot.sequence} · ${formatDate(snapshot.createdAt)}`]);
+  const choices = state.revisions.map(snapshot => [snapshot.sequence, `第 ${snapshot.sequence} 版 · ${formatDate(snapshot.createdAt)}`]);
   panel.innerHTML = `<div class="grid">
-    <div class="field"><label for="version-from">基准版本</label><select id="version-from">${optionsHtml(choices, state.from)}</select></div>
-    <div class="field"><label for="version-to">对比与导出版本</label><select id="version-to">${optionsHtml(choices, state.to)}</select></div>
-  </div><div class="toolbar" style="margin-top:10px">${action('导出计算书 PDF', 'print-version', 'primary', 'id="print-version"')}</div>
-  <p class="hint">打印窗口中选择「另存为 PDF」。计算书使用上方选择的已保存版本。</p>
+    <div class="field"><label for="version-from">与哪一版比较</label><select id="version-from">${optionsHtml(choices, state.from)}</select></div>
+    <div class="field"><label for="version-to">查看哪一版</label><select id="version-to">${optionsHtml(choices, state.to)}</select></div>
+  </div><div class="toolbar" style="margin-top:10px">${action('打印或另存计算书', 'print-version', 'primary', 'id="print-version"')}</div>
+  <p class="hint">计算书适合发给同事复核，包含所选版本的输入、公式和结果。在打印窗口选择「另存为 PDF」即可下载。</p>
   <div id="version-diff"></div>`;
   renderDiff();
 }
@@ -460,7 +488,7 @@ function handleInput(event) {
   updateValue(control.dataset.path, control.value);
   const [group, id, key] = control.dataset.path.split('.');
   if (group === 'line') {
-    document.querySelector('#sheet-title').textContent = safeName(control.value, '新计算单');
+    document.querySelector('#sheet-title').textContent = safeName(control.value, '新建管线比选');
     state.worksheets = state.worksheets.map(sheet => sheet.id === state.worksheet.id ? state.worksheet : sheet);
     renderSidebar();
   }
@@ -503,13 +531,14 @@ function resetViews() {
   state.revisions = [];
 }
 
-async function openProject(project, sheetId) {
+async function openProject(project, sheetId, { openSingleSheet = false } = {}) {
   state.worksheets = await state.storage.listWorksheets(project.id);
   state.project = project;
   state.worksheet = null;
   resetViews();
-  if (sheetId) {
-    const worksheet = state.worksheets.find(sheet => sheet.id === sheetId);
+  const target = sheetId ?? (openSingleSheet && state.worksheets.length === 1 ? state.worksheets[0].id : null);
+  if (target) {
+    const worksheet = state.worksheets.find(sheet => sheet.id === target);
     if (worksheet) {
       state.worksheet = worksheet;
       state.revisions = await state.storage.listRevisions(worksheet.id);
@@ -530,13 +559,13 @@ function openHome() {
   window.scrollTo(0, 0);
 }
 
-function requestProjectName() {
+function requestProjectName(forCalculation = false) {
   return new Promise(resolve => {
     const dialog = document.createElement('dialog');
     dialog.className = 'form-dialog';
     dialog.innerHTML = `<form method="dialog">
-      <h2>新建项目</h2><div class="field"><label for="new-name">项目名称</label><input id="new-name" required maxlength="160" autofocus></div>
-      <div class="toolbar"><button class="button" type="button" data-cancel>取消</button><button class="button primary" type="submit">创建项目</button></div>
+      <h2>${forCalculation ? '开始管径比选' : '新建项目'}</h2><div class="field"><label for="new-name">项目名称</label><input id="new-name" required maxlength="160" autofocus></div>
+      <div class="toolbar"><button class="button" type="button" data-cancel>取消</button><button class="button primary" type="submit">${forCalculation ? '填写计算条件' : '创建项目'}</button></div>
     </form>`;
     document.body.append(dialog);
     dialog.querySelector('[data-cancel]').addEventListener('click', () => dialog.close());
@@ -573,7 +602,7 @@ async function saveVersion() {
   renderSidebar();
   renderVersions();
   if (!state.draftDirty) setSaveStatus('草稿已保存到此浏览器');
-  announce(`已保存 V${snapshot.sequence}`);
+  announce(`已保存第 ${snapshot.sequence} 版，可查看历史或生成计算书。`);
 }
 
 function downloadProject(contents, name) {
@@ -597,7 +626,7 @@ async function exportProject() {
     }))).flat();
     downloadProject(serializeBackup(state.project, worksheets, revisions), state.project.name);
   }
-  announce('已导出项目 JSON');
+  announce('项目文件已下载，可备份或发给同事。');
 }
 
 function updateRows(key, id) {
@@ -637,6 +666,17 @@ const operations = {
     const saved = await state.storage.createProjectWithWorksheet(project, worksheet);
     state.projects = await state.storage.listProjects();
     await openProject(saved.project, saved.worksheet.id);
+  }),
+  'start-calculation': run(async () => {
+    const name = await requestProjectName(true);
+    if (!name) return;
+    const project = createProject(name);
+    const worksheet = createWorksheet(project.id);
+    const saved = await state.storage.createProjectWithWorksheet(project, worksheet);
+    state.projects = await state.storage.listProjects();
+    await openProject(saved.project, saved.worksheet.id);
+    const flow = workspace.querySelector('input[data-path$=".flow"]');
+    flow?.focus();
   }),
   'new-project': run(async () => {
     const name = await requestProjectName();
@@ -678,11 +718,16 @@ importInput.addEventListener('change', run(async () => {
   const [file] = importInput.files;
   importInput.value = '';
   if (!file) return;
-  if (file.size > 20 * 1024 * 1024) throw new Error('项目文件不能超过 20 MB。');
-  const project = await state.storage.importProject(await file.text());
+  if (file.size > 20 * 1024 * 1024) throw new Error('这个项目文件太大。请选择 20 MB 以内的项目文件。');
+  let project;
+  try {
+    project = await state.storage.importProject(await file.text());
+  } catch {
+    throw new Error('打不开这个项目文件。请确认它是从工作台下载的文件，再试一次。');
+  }
   state.projects = await state.storage.listProjects();
-  await openProject(project);
-  announce('已导入为独立项目');
+  await openProject(project, null, { openSingleSheet: true });
+  announce('项目已打开，并作为一份独立副本保存在此浏览器。');
 }));
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden' && (state.projectDirty || state.draftDirty)) {

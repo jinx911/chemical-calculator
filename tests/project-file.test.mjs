@@ -45,9 +45,9 @@ test('备份导入保留草稿与历史结果，复制项目和计算单标识�
 test('导入拒绝损坏文件、外部格式和未来版本', () => {
   const { project, worksheets, revisions } = fixture();
   const payload = JSON.parse(serializeBackup(project, worksheets, revisions));
-  assert.throws(() => parseBackup('{'), /无法读取/);
-  assert.throws(() => parseBackup('{}'), /不是工艺计算工作台/);
-  assert.throws(() => parseBackup(JSON.stringify({ ...payload, schemaVersion: 2 })), /版本不受支持/);
+  assert.throws(() => parseBackup('{'), /打不开这个项目文件/);
+  assert.throws(() => parseBackup('{}'), /从工艺计算工作台下载/);
+  assert.throws(() => parseBackup(JSON.stringify({ ...payload, schemaVersion: 2 })), /打不开这一版项目文件/);
 });
 
 test('导入在创建副本之前拒绝无效引用、重复记录和缺失快照', () => {
