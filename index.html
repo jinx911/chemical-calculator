@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f5f7f5">
+  <meta name="description" content="比选液体管线管径，校核流速与压降，保存设计版本并导出计算书。">
+  <title>管径与压降 · 化工工艺工作台</title>
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./print.css" media="print">
+  <script type="module" src="./src/app.mjs"></script>
+</head>
+<body>
+  <div id="app-shell">
+    <header class="topbar">
+      <div class="topbar-content">
+        <button class="brand" type="button" data-action="home" aria-label="化工工艺工作台首页">
+          <span class="brand-icon" aria-hidden="true">∿</span>
+          <span>ChemCalc<small>化工工艺工作台</small></span>
+        </button>
+        <span class="local-state"><span></span>本机项目</span>
+      </div>
+    </header>
+    <div class="layout">
+      <aside class="sidebar" aria-label="项目和计算单" id="sidebar"></aside>
+      <main class="workspace" id="workspace">
+        <p class="loading">正在打开工作台…</p>
+      </main>
+    </div>
+    <input type="file" id="import-project" accept=".json,application/json" hidden aria-label="选择项目 JSON 文件">
+    <p id="notice" class="notice" role="status" hidden></p>
+    <noscript><p class="notice">请启用 JavaScript 以使用计算工作台。</p></noscript>
+  </div>
+  <main id="report" hidden></main>
+</body>
+</html>
