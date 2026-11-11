@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./print.css" media="print">
   <script type="module" src="./src/app.mjs"></script>
+  <script type="module" src="./src/formula-dock.mjs"></script>
 </head>
 <body>
   <div id="app-shell">
@@ -19,7 +20,6 @@
           <span>ChemCalc<small>化工工艺工作台</small></span>
         </button>
         <div class="header-tools">
-          <a class="button" href="./formulas.html" id="open-formulas">公式计算</a>
           <span class="local-state"><span></span>保存在此浏览器</span>
         </div>
       </div>
@@ -30,6 +30,17 @@
         <p class="loading">正在打开工作台…</p>
       </main>
     </div>
+    <aside id="formula-dock" class="formula-dock" aria-labelledby="formula-dock-title" hidden>
+      <header class="formula-dock-head">
+        <h2 id="formula-dock-title">公式计算</h2>
+        <button type="button" class="button" id="close-formulas" aria-label="收起公式计算">收起</button>
+      </header>
+      <div id="formula-dock-body" class="formula-dock-body"></div>
+    </aside>
+    <button type="button" id="open-formulas" class="button primary formula-launcher"
+      aria-controls="formula-dock" aria-expanded="false" hidden>
+      <span aria-hidden="true">ƒ</span>公式计算
+    </button>
     <input type="file" id="import-project" accept=".json,application/json" hidden aria-label="选择项目文件">
     <p id="notice" class="notice" role="status" hidden></p>
     <noscript><p class="notice">请启用 JavaScript 以使用计算工作台。</p></noscript>

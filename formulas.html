@@ -26,32 +26,7 @@
       <h1>化工公式计算</h1>
       <p class="muted">按要算的量选公式，再填入已知参数。</p>
     </header>
-    <div class="formula-columns">
-      <section class="section" aria-label="选择公式与输入参数">
-        <div class="field formula-picker">
-          <label for="formula-picker">你要算什么？</label>
-          <select id="formula-picker"></select>
-        </div>
-        <p id="formula-description" class="muted"></p>
-        <form id="formula-form" novalidate>
-          <div class="grid formula-fields" id="formula-fields"></div>
-          <div class="toolbar">
-            <button class="button primary" type="submit">计算</button>
-            <button class="button" id="formula-example" type="button">载入算例</button>
-          </div>
-        </form>
-      </section>
-      <section class="section formula-output" aria-labelledby="formula-result-title">
-        <h2 id="formula-result-title">计算结果</h2>
-        <div id="formula-result" aria-live="polite"></div>
-        <details open>
-          <summary>计算依据</summary>
-          <p id="formula-equation" class="formula-equation"></p>
-          <p id="formula-substitution" class="hint" hidden></p>
-          <a id="formula-reference" class="hint" target="_blank" rel="noopener"></a>
-        </details>
-      </section>
-    </div>
+    <div data-standalone-formulas></div>
   </main>
 </body>
 </html>

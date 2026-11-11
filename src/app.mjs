@@ -785,13 +785,6 @@ document.addEventListener('click', event => {
   else operations[key]?.(id);
 });
 
-document.getElementById('open-formulas').addEventListener('click', event => {
-  if ((!state.projectDirty && !state.draftDirty) || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  event.preventDefault();
-  const url = event.currentTarget.href;
-  run(() => window.location.assign(url))();
-});
-
 workspace.addEventListener('input', handleInput);
 workspace.addEventListener('change', handleChange);
 importInput.addEventListener('change', run(async () => {

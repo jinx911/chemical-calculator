@@ -209,7 +209,13 @@ async function checkStart(page, directory) {
 async function checkFormulaMenu(page, directory) {
   const flow = page.getByLabel('体积流量', { exact: true }).last();
   await flow.fill('56');
-  await page.getByRole('link', { name: '公式计算', exact: true }).click();
+  const sheet = page.url();
+  const launch = page.getByRole('button', { name: '公式计算', exact: true });
+  const panel = page.getByRole('complementary', { name: '公式计算', exact: true });
+  await launch.click();
+  assert.equal(page.url(), sheet);
+  assert.equal(await flow.inputValue(), '56');
+  assert(await panel.isVisible());
   const picker = page.getByLabel('你要算什么？');
   await picker.locator('option').first().waitFor({ state: 'attached' });
   assert.equal(await picker.locator('option').count(), 9);
@@ -225,16 +231,25 @@ async function checkFormulaMenu(page, directory) {
   await picker.selectOption('lmtd');
   await page.getByRole('button', { name: '载入算例' }).click();
   assert.match(await page.locator('#formula-result').innerText(), /对数平均温差\s+37\.44/);
-  await page.reload();
+  await page.getByRole('button', { name: '收起公式计算' }).click();
+  assert(!(await panel.isVisible()));
+  await flow.fill('57');
+  await launch.click();
+  assert.equal(await picker.inputValue(), 'lmtd');
+  assert.match(await page.locator('#formula-result').innerText(), /对数平均温差\s+37\.44/);
+  assert.equal(await flow.inputValue(), '57');
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+  const bounds = await panel.boundingBox();
+  assert(bounds.x >= 0 && bounds.x + bounds.width <= 390 && bounds.y >= 0);
+  if (directory) await page.screenshot({ path: resolve(directory, 'formulas-dock-mobile.png') });
+  await picker.press('Escape');
+  assert(!(await panel.isVisible()));
+  assert(await launch.evaluate(button => button === document.activeElement));
+  assert.equal(page.url(), sheet);
+  await page.goto(new URL('formulas.html#lmtd', sheet).href);
   await picker.locator('option').first().waitFor({ state: 'attached' });
   assert.equal(await picker.inputValue(), 'lmtd');
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: '载入算例' }).click();
-  assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
-  if (directory) await page.screenshot({ path: resolve(directory, 'formulas-mobile.png'), fullPage: true });
-  await page.getByRole('link', { name: '管径比选', exact: true }).click();
-  await flow.waitFor();
-  assert.equal(await flow.inputValue(), '56');
 }
 
 const external = process.env.PAGES_TEST_URL;

@@ -5,7 +5,7 @@ const target = new URL('dist/', root);
 const publishedFiles = [
   'index.html', 'formulas.html', 'styles.css', 'print.css',
   'src/app.mjs', 'src/model.mjs', 'src/hydraulics.mjs', 'src/presentation.mjs',
-  'src/formulas.mjs', 'src/formula-page.mjs', 'src/storage.mjs', 'src/project-file.mjs', 'src/report.mjs',
+  'src/formulas.mjs', 'src/formula-page.mjs', 'src/formula-dock.mjs', 'src/storage.mjs', 'src/project-file.mjs', 'src/report.mjs',
 ];
 
 await rm(target, { recursive: true, force: true });
