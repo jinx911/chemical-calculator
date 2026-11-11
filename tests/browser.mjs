@@ -211,7 +211,7 @@ async function checkFormulaMenu(page, directory) {
   await flow.fill('56');
   await page.getByRole('link', { name: '公式计算', exact: true }).click();
   const picker = page.getByLabel('你要算什么？');
-  await picker.waitFor();
+  await picker.locator('option').first().waitFor({ state: 'attached' });
   assert.equal(await picker.locator('option').count(), 9);
   await page.getByRole('button', { name: '计算', exact: true }).click();
   assert.equal(await page.locator('#formula-fields [aria-invalid="true"]').count(), 2);
@@ -226,6 +226,7 @@ async function checkFormulaMenu(page, directory) {
   await page.getByRole('button', { name: '载入算例' }).click();
   assert.match(await page.locator('#formula-result').innerText(), /对数平均温差\s+37\.44/);
   await page.reload();
+  await picker.locator('option').first().waitFor({ state: 'attached' });
   assert.equal(await picker.inputValue(), 'lmtd');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: '载入算例' }).click();
