@@ -25,8 +25,10 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:browser
+      - name: Verify in Chrome
+        run: |
+          google-chrome --version
+          CHROMIUM_EXECUTABLE="$(command -v google-chrome)" npm run test:browser
       - uses: actions/upload-pages-artifact@v4
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:
