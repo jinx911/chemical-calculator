@@ -9,12 +9,28 @@ function element(tag, content, className) {
 }
 
 const calculatorMarkup = `
-    <div class="formula-columns">
-      <section class="section" aria-label="选择公式与输入参数">
-        <div class="field formula-picker">
-          <label for="formula-picker">你要算什么？</label>
-          <select id="formula-picker"></select>
+    <section class="section formula-catalog" aria-label="查找公式">
+      <div class="formula-filters">
+        <div class="field">
+          <label for="formula-search">搜索公式</label>
+          <input id="formula-search" type="search" placeholder="如：压降、LMTD" autocomplete="off">
         </div>
+        <div class="field">
+          <label for="formula-category">公式分类</label>
+          <select id="formula-category">
+            <option value="">全部分类</option>
+          </select>
+        </div>
+      </div>
+      <div class="formula-filter-status">
+        <p id="formula-match-count" class="hint" role="status"></p>
+        <button class="formula-clear" id="formula-clear" type="button" hidden>清除筛选</button>
+      </div>
+      <ul id="formula-matches" class="formula-matches" role="list" aria-label="可选公式"></ul>
+    </section>
+    <div class="formula-columns">
+      <section class="section" aria-labelledby="formula-title">
+        <h2 id="formula-title" tabindex="-1"></h2>
         <p id="formula-description" class="muted"></p>
         <form id="formula-form" novalidate>
           <div class="grid formula-fields" id="formula-fields"></div>
@@ -37,15 +53,23 @@ const calculatorMarkup = `
     </div>
 `;
 
+const normalizeSearch = value => value.normalize('NFKC').toLowerCase().trim();
+
 export function mountFormulaCalculator(root, { syncHash = false, revealResult = () => {} } = {}) {
   root.innerHTML = calculatorMarkup;
   const byId = id => root.querySelector('#' + id);
-  const picker = byId('formula-picker');
+  const search = byId('formula-search');
+  const category = byId('formula-category');
+  const matchList = byId('formula-matches');
+  const matchCount = byId('formula-match-count');
+  const clearFilters = byId('formula-clear');
+  const title = byId('formula-title');
   const form = byId('formula-form');
   const result = byId('formula-result');
   const fieldPanel = byId('formula-fields');
   const substitution = byId('formula-substitution');
   const saved = new Map();
+  const choices = new Map();
   let current;
   let controls;
 
@@ -95,9 +119,13 @@ export function mountFormulaCalculator(root, { syncHash = false, revealResult = 
   function selectFormula(id) {
     const next = formulas.find(formula => formula.id === id) ?? formulas[0];
     if (next === current) return;
-    if (current) saved.set(current.id, readInputs());
+    if (current) {
+      saved.set(current.id, readInputs());
+      choices.get(current.id).button.setAttribute('aria-pressed', 'false');
+    }
     current = next;
-    picker.value = current.id;
+    choices.get(current.id).button.setAttribute('aria-pressed', 'true');
+    title.textContent = current.name;
     byId('formula-description').textContent = current.description;
     byId('formula-equation').textContent = current.equation;
     const reference = byId('formula-reference');
@@ -149,21 +177,53 @@ export function mountFormulaCalculator(root, { syncHash = false, revealResult = 
     revealResult(result);
   }
 
-  const groups = new Map();
-  for (const formula of formulas) {
-    if (!groups.has(formula.group)) {
-      const group = element('optgroup');
-      group.label = formula.group;
-      groups.set(formula.group, group);
-      picker.append(group);
+  function filterFormulas() {
+    const query = normalizeSearch(search.value);
+    const terms = query ? query.split(/\s+/) : [];
+    let matches = 0;
+    for (const { row, group, searchable } of choices.values()) {
+      const match = (!category.value || category.value === group)
+        && terms.every(term => searchable.includes(term));
+      row.hidden = !match;
+      if (match) matches++;
     }
-    groups.get(formula.group).append(new Option(formula.name, formula.id));
+    matchList.hidden = matches === 0;
+    matchList.scrollTop = 0;
+    matchCount.textContent = matches ? `找到 ${matches} 个公式` : '没有匹配的公式，试试其他关键词或分类。';
+    clearFilters.hidden = !query && !category.value;
+  }
+
+  for (const group of new Set(formulas.map(formula => formula.group))) {
+    category.add(new Option(group, group));
+  }
+  for (const formula of formulas) {
+    const row = element('li');
+    const button = element('button', null, 'formula-choice');
+    button.type = 'button';
+    button.setAttribute('aria-pressed', 'false');
+    button.append(element('span', formula.name), element('small', formula.group));
+    button.addEventListener('click', () => {
+      if (syncHash) history.replaceState(null, '', '#' + formula.id);
+      selectFormula(formula.id);
+      title.focus();
+    });
+    row.append(button);
+    matchList.append(row);
+    const searchable = normalizeSearch([
+      formula.name, formula.group, ...formula.result.map(([label]) => label), ...(formula.keywords ?? []),
+    ].join(' '));
+    choices.set(formula.id, { row, button, group: formula.group, searchable });
   }
 
   selectFormula(syncHash ? location.hash.slice(1) : '');
-  picker.addEventListener('change', () => {
-    if (syncHash) history.replaceState(null, '', '#' + picker.value);
-    selectFormula(picker.value);
+  filterFormulas();
+  search.addEventListener('input', filterFormulas);
+  category.addEventListener('change', filterFormulas);
+  clearFilters.addEventListener('click', () => {
+    search.value = '';
+    category.value = '';
+    search.focus({ preventScroll: true });
+    filterFormulas();
   });
   if (syncHash) window.addEventListener('hashchange', () => selectFormula(location.hash.slice(1)));
   form.addEventListener('submit', event => {
@@ -179,7 +239,7 @@ export function mountFormulaCalculator(root, { syncHash = false, revealResult = 
     }
     showCalculation();
   });
-  return { focus: () => picker.focus({ preventScroll: true }) };
+  return { focus: () => search.focus({ preventScroll: true }) };
 }
 
 const standalone = document.querySelector('[data-standalone-formulas]');

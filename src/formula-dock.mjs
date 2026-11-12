@@ -18,6 +18,7 @@ function toggle(open) {
   launch.setAttribute('aria-expanded', String(open));
   panel.hidden = !open;
   if (open) {
+    body.scrollTop = 0;
     if (!calculator) {
       calculator = mountFormulaCalculator(body, { revealResult });
       calculator.focus();
